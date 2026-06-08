@@ -1,0 +1,16 @@
+{
+  "/api/driver/active/route": "app/api/driver/active/route.js",
+  "/api/driver/availability/route": "app/api/driver/availability/route.js",
+  "/api/driver/location/route": "app/api/driver/location/route.js",
+  "/api/driver/requests/route": "app/api/driver/requests/route.js",
+  "/api/driver/rides/[rideId]/accept/route": "app/api/driver/rides/[rideId]/accept/route.js",
+  "/api/driver/rides/[rideId]/decline/route": "app/api/driver/rides/[rideId]/decline/route.js",
+  "/api/driver/rides/[rideId]/status/route": "app/api/driver/rides/[rideId]/status/route.js",
+  "/api/places/autocomplete/route": "app/api/places/autocomplete/route.js",
+  "/api/rides/[rideId]/cancel/route": "app/api/rides/[rideId]/cancel/route.js",
+  "/api/rides/[rideId]/route": "app/api/rides/[rideId]/route.js",
+  "/api/rides/active/route": "app/api/rides/active/route.js",
+  "/api/rides/history/route": "app/api/rides/history/route.js",
+  "/api/rides/request/route": "app/api/rides/request/route.js",
+  "/api/users/me/route": "app/api/users/me/route.js"
+}

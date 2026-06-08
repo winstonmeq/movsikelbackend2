@@ -1,0 +1,3 @@
+{
+  "/api/driver/rides/[rideId]/decline/route": "app/api/driver/rides/[rideId]/decline/route.js"
+}
