@@ -11,19 +11,20 @@
   },
   "dependencies": {
     "bcryptjs": "latest",
+    "dotenv": "latest",
     "jose": "latest",
     "mongoose": "latest",
     "nanoid": "latest",
-    "next": "latest",
+    "next": "16.2.7",
     "react": "latest",
     "react-dom": "latest",
-    "zod": "latest",
-    "dotenv": "latest"
+    "zod": "latest"
   },
   "devDependencies": {
     "@types/bcryptjs": "latest",
     "@types/node": "latest",
-    "typescript": "latest",
-    "tsx": "latest"
+    "@types/react": "^19.2.17",
+    "tsx": "latest",
+    "typescript": "latest"
   }
 }
