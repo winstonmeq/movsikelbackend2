@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///C:/nextjs/backend/lib/http.ts"],"sourcesContent":["import { NextResponse } from 'next/server';\n\nexport function ok(data: unknown, status = 200) {\n  return NextResponse.json({ ok: true, data }, { status });\n}\n\nexport function fail(message: string, status = 400) {\n  return NextResponse.json({ ok: false, error: message }, { status });\n}\n"],"names":["ok","data","status","json","fail","message","error"],"mappings":";;;;;;AAAA;;AAEO,SAASA,GAAGC,IAAa,EAAEC,SAAS,GAAG;IAC5C,OAAO,gJAAY,CAACC,IAAI,CAAC;QAAEH,IAAI;QAAMC;IAAK,GAAG;QAAEC;IAAO;AACxD;AAEO,SAASE,KAAKC,OAAe,EAAEH,SAAS,GAAG;IAChD,OAAO,gJAAY,CAACC,IAAI,CAAC;QAAEH,IAAI;QAAOM,OAAOD;IAAQ,GAAG;QAAEH;IAAO;AACnE"}},
-    {"offset": {"line": 74, "column": 0}, "map": {"version":3,"sources":["file:///C:/nextjs/backend/app/api/health/route.ts"],"sourcesContent":["import { ok } from '@/lib/http';\n\nexport async function GET() {\n  return ok({ service: 'movsikel-backend', status: 'healthy' });\n}\n"],"names":["GET","service","status"],"mappings":";;;;AAAA;;AAEO,eAAeA;IACpB,OAAO,IAAA,mHAAE,EAAC;QAAEC,SAAS;QAAoBC,QAAQ;IAAU;AAC7D"}}]
-}
