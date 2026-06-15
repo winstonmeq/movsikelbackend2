@@ -86,12 +86,11 @@ export async function POST(req: NextRequest) {
     const driversForRequest = [...(await findNearbyRealDrivers(body.pickup, radiusMeters))];
     let searchExpanded = false;
 
-    // Development/testing fallback: if your emulator phone location is not close to the pickup,
-    // still send the request to online real drivers. Disable with DISPATCH_ALL_ONLINE_DRIVERS_IF_NONE_NEARBY=false.
+    // Development/testing fallback: opt in only when emulator phones are not close to the pickup.
     if (
       !simulatorEnabled &&
       driversForRequest.length === 0 &&
-      String(process.env.DISPATCH_ALL_ONLINE_DRIVERS_IF_NONE_NEARBY || 'true').toLowerCase() === 'true'
+      String(process.env.DISPATCH_ALL_ONLINE_DRIVERS_IF_NONE_NEARBY || 'false').toLowerCase() === 'true'
     ) {
       const onlineDrivers = await findAnyOnlineRealDrivers();
       driversForRequest.push(...onlineDrivers);

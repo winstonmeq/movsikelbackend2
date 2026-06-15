@@ -50,5 +50,5 @@ const userSchema = new mongoose.Schema<IUser>(
 
 userSchema.index({ currentLocation: '2dsphere' });
 
-export const User = mongoose.models.User || mongoose.model<IUser>('User', userSchema);
+export const User = (mongoose.models.User as mongoose.Model<IUser>) || mongoose.model<IUser>('User', userSchema);
 export type UserDocument = mongoose.HydratedDocument<IUser>;
