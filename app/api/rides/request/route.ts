@@ -26,6 +26,7 @@ const schema = z.object({
   destination: locSchema,
   rideType: z.enum(['shared', 'book']).default('book'),
   offeredFare: z.number().positive().optional(),
+  passengerCount: z.number().int().min(1, 'Number of passengers must be at least 1.').optional(),
   distanceMeters: z.number().optional(),
   durationSeconds: z.number().optional(),
   searchRadiusMeters: z.number().min(500).max(50000).optional()
@@ -109,7 +110,11 @@ export async function POST(req: NextRequest) {
     if (body.rideType === 'book' && (!body.offeredFare || body.offeredFare <= 0)) {
       return fail('Fare offer is required for Booking Ride.');
     }
+    if (body.rideType === 'book' && (!body.passengerCount || body.passengerCount < 1)) {
+      return fail('Number of passengers is required for Booking Ride.');
+    }
     const offeredFare = body.rideType === 'book' && body.offeredFare ? cleanMoney(body.offeredFare) : undefined;
+    const passengerCount = body.rideType === 'book' ? body.passengerCount : undefined;
 
     const ride = await Ride.create({
       passengerId: new mongoose.Types.ObjectId(auth.sub),
@@ -117,6 +122,7 @@ export async function POST(req: NextRequest) {
       destination: body.destination,
       status: 'requested',
       rideType: body.rideType,
+      passengerCount,
       fareEstimate,
       offeredFare,
       distanceMeters: body.distanceMeters,

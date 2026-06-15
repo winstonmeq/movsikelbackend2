@@ -26,6 +26,7 @@ export interface IRide {
   destination: IRideLocation;
   status: RideStatus;
   rideType: RideType;
+  passengerCount?: number;
   fareEstimate: number;
   offeredFare?: number;
   distanceMeters?: number;
@@ -70,6 +71,7 @@ const rideSchema = new mongoose.Schema<IRide>(
       default: 'book',
       index: true
     },
+    passengerCount: { type: Number, min: 1 },
     fareEstimate: { type: Number, required: true },
     offeredFare: { type: Number },
     distanceMeters: { type: Number },
@@ -84,5 +86,7 @@ const rideSchema = new mongoose.Schema<IRide>(
   { timestamps: true }
 );
 
-export const Ride = mongoose.models.Ride || mongoose.model<IRide>('Ride', rideSchema);
+export const Ride =
+  (mongoose.models.Ride as mongoose.Model<IRide>) ||
+  mongoose.model<IRide>('Ride', rideSchema);
 export type RideDocument = mongoose.HydratedDocument<IRide>;
