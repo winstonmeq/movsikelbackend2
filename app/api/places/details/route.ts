@@ -1,6 +1,26 @@
 import { NextRequest } from 'next/server';
 import { fail, ok } from '@/lib/http';
 
+// --- Kidapawan City service area (bounding box) ------------------------------
+// A selected place must fall inside this box, otherwise it's outside the pilot
+// service area and is rejected. This is the HARD limit (autocomplete only
+// biases; this enforces). Box is ~the 358 km² city + a small buffer.
+const KIDAPAWAN_BOUNDS = {
+  minLat: 6.86,
+  maxLat: 7.16,
+  minLng: 124.94,
+  maxLng: 125.24
+};
+
+function isInsideKidapawan(lat: number, lng: number) {
+  return (
+    lat >= KIDAPAWAN_BOUNDS.minLat &&
+    lat <= KIDAPAWAN_BOUNDS.maxLat &&
+    lng >= KIDAPAWAN_BOUNDS.minLng &&
+    lng <= KIDAPAWAN_BOUNDS.maxLng
+  );
+}
+
 function cleanSessionToken(value: string | null) {
   const token = (value || '').trim();
   return token.length > 0 && token.length <= 128 ? token : null;
@@ -33,13 +53,21 @@ export async function GET(req: NextRequest) {
     }
 
     const place = json.result;
+    const lat = place.geometry.location.lat;
+    const lng = place.geometry.location.lng;
+
+    // Hard service-area limit: reject destinations outside Kidapawan City.
+    if (!isInsideKidapawan(lat, lng)) {
+      return fail('That location is outside the Kidapawan City service area.', 422);
+    }
+
     return ok({
       place: {
         placeId: place.place_id,
         name: place.name,
         address: place.formatted_address,
-        lat: place.geometry.location.lat,
-        lng: place.geometry.location.lng
+        lat,
+        lng
       }
     });
   } catch (err: unknown) {

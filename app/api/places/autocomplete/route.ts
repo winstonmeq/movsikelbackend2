@@ -4,6 +4,15 @@ import { fail, ok } from '@/lib/http';
 const MIN_QUERY_LENGTH = 3;
 const MAX_RESULTS = 5;
 
+// --- Kidapawan City service area ---------------------------------------------
+// Pilot is limited to Kidapawan City, Cotabato. We bias the Places search hard
+// toward the city center with a city-sized radius so results are local. (The
+// legacy Places Autocomplete endpoint supports location+radius BIASING but not
+// strict rectangle restriction, so this strongly prefers — but cannot 100%
+// guarantee exclusion of — nearby out-of-city results.)
+const KIDAPAWAN_CENTER = { lat: 7.0083, lng: 125.0894 };
+const KIDAPAWAN_RADIUS_METERS = 15000; // ~covers the 358 km² city + small buffer
+
 function cleanSessionToken(value: string | null) {
   const token = (value || '').trim();
   return token.length > 0 && token.length <= 128 ? token : null;
@@ -16,8 +25,6 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const input = (searchParams.get('input') || '').trim();
-    const lat = searchParams.get('lat');
-    const lng = searchParams.get('lng');
     const sessionToken = cleanSessionToken(searchParams.get('sessionToken'));
 
     // Cost guard: do not call Google Places for very short input.
@@ -26,16 +33,16 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams({
       input,
       key,
-      components: 'country:ph'
+      components: 'country:ph',
+      // Always bias to Kidapawan center with a city-sized radius. We ignore any
+      // lat/lng the client sends so the search stays locked to the service area
+      // regardless of where the user's GPS actually is.
+      location: `${KIDAPAWAN_CENTER.lat},${KIDAPAWAN_CENTER.lng}`,
+      radius: String(KIDAPAWAN_RADIUS_METERS)
     });
 
     // Session tokens group autocomplete + place details into one search session.
     if (sessionToken) params.set('sessiontoken', sessionToken);
-
-    if (lat && lng) {
-      params.set('location', `${lat},${lng}`);
-      params.set('radius', '30000');
-    }
 
     const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`);
     const json = await response.json();
