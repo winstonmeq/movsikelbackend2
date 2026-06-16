@@ -22,8 +22,6 @@ import { User } from '@/models/User';
  * /requests filter only shows a ride to whoever is currently being offered.
  */
 
-const DUMMY_DRIVER_PHONE = '09000000000';
-
 export function offerWindowMs() {
   return Number(process.env.DISPATCH_OFFER_WINDOW_MS || 10000); // 10s per stage
 }
@@ -51,7 +49,6 @@ export async function buildDispatchQueue(
   const drivers = await User.find({
     role: 'driver',
     ...onlineDriverFilter(),
-    phone: { $ne: DUMMY_DRIVER_PHONE },
     currentLocation: {
       $near: {
         $geometry: { type: 'Point', coordinates: [pickup.lng, pickup.lat] },

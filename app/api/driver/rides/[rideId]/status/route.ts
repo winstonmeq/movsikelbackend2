@@ -5,12 +5,13 @@ import { connectDb } from '@/lib/db';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { emitToUser } from '@/lib/realtime';
+import { withLogger } from '@/lib/logger';
 import { Ride, type RideStatus } from '@/models/Ride';
 
 const allowedStatuses: RideStatus[] = ['arrived', 'in_progress', 'completed', 'cancelled'];
 const schema = z.object({ status: z.enum(['arrived', 'in_progress', 'completed', 'cancelled']) });
 
-export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
+export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
   try {
     await connectDb();
     let auth;
@@ -66,4 +67,4 @@ export async function POST(req: NextRequest, context: { params: Promise<{ rideId
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not update ride status');
   }
-}
+});

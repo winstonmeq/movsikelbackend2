@@ -5,6 +5,7 @@ import { fail, ok } from '@/lib/http';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { emitToUser } from '@/lib/realtime';
+import { withLogger } from '@/lib/logger';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 
@@ -14,7 +15,7 @@ const schema = z.object({
   heading: z.number().optional()
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withLogger(async function POST(req: NextRequest) {
   try {
     await connectDb();
 
@@ -63,4 +64,4 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not update driver location');
   }
-}
+});

@@ -4,10 +4,11 @@ import { connectDb } from '@/lib/db';
 import { fail, ok } from '@/lib/http';
 import { requireActiveUser, statusForAuthError, onlineFreshnessMs } from '@/lib/account';
 import { progressDispatchIfNeeded } from '@/lib/dispatch';
+import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 
-export async function GET(req: NextRequest) {
+export const GET = withLogger(async function GET(req: NextRequest) {
   try {
     await connectDb();
     let auth;
@@ -61,4 +62,4 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load ride requests');
   }
-}
+});

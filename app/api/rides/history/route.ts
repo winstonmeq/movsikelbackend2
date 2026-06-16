@@ -4,8 +4,9 @@ import { connectDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
 import { Ride } from '@/models/Ride';
+import { withLogger } from '@/lib/logger';
 
-export async function GET(req: NextRequest) {
+export const GET = withLogger(async function GET(req: NextRequest) {
   try {
     await connectDb();
     const auth = await getAuthUser(req);
@@ -20,4 +21,4 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load trip history');
   }
-}
+});

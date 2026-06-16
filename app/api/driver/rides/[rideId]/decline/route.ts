@@ -4,9 +4,10 @@ import { connectDb } from '@/lib/db';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { advanceDispatchOnDecline } from '@/lib/dispatch';
+import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
 
-export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
+export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
   try {
     await connectDb();
     let auth;
@@ -39,4 +40,4 @@ export async function POST(req: NextRequest, context: { params: Promise<{ rideId
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not decline ride');
   }
-}
+});

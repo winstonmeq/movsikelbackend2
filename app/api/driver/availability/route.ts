@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
+import { withLogger } from '@/lib/logger';
 import { User } from '@/models/User';
 
 const schema = z.object({
@@ -14,7 +15,7 @@ const schema = z.object({
   heading: z.number().optional()
 });
 
-export async function GET(req: NextRequest) {
+export const GET = withLogger(async function GET(req: NextRequest) {
   try {
     await connectDb();
     const auth = await getAuthUser(req);
@@ -27,9 +28,9 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load driver availability');
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withLogger(async function POST(req: NextRequest) {
   try {
     await connectDb();
 
@@ -42,8 +43,6 @@ export async function POST(req: NextRequest) {
     if (auth.role !== 'driver') return fail('Only drivers can update availability', 403);
 
     const body = schema.parse(await req.json());
-    // Going online refreshes lastSeenAt so the freshness window starts now.
-    // Going offline clears it.
     const update: Record<string, unknown> = {
       online: body.online,
       lastSeenAt: body.online ? new Date() : null
@@ -64,4 +63,4 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not update availability');
   }
-}
+});

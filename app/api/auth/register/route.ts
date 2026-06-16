@@ -7,6 +7,8 @@ import { signToken } from '@/lib/auth';
 import { normalizePhone, isValidPhone } from '@/lib/phone';
 import { User } from '@/models/User';
 
+import { withLogger } from '@/lib/logger';
+
 const schema = z.object({
   name: z.string().trim().min(2, 'Full name must be at least 2 characters.'),
   phone: z.string().trim().min(6, 'Phone number must be at least 6 digits.'),
@@ -25,7 +27,7 @@ function formatValidationError(error: z.ZodError) {
     .join(' ');
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withLogger(async function POST(req: NextRequest) {
   try {
     await connectDb();
 
@@ -89,4 +91,4 @@ export async function POST(req: NextRequest) {
     console.error('Registration failed:', err);
     return fail('Registration failed. Check the backend terminal for details.', 500);
   }
-}
+});

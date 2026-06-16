@@ -1,5 +1,6 @@
 import { ok } from '@/lib/http';
+import { withLogger } from '@/lib/logger';
 
-export async function GET() {
+export const GET = withLogger(async () => {
   return ok({ service: 'movsikel-backend', status: 'healthy' });
-}
+});

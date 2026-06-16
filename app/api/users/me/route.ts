@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
+import { withLogger } from '@/lib/logger';
 import { User } from '@/models/User';
 
 const schema = z.object({
@@ -22,7 +23,7 @@ function toPassengerProfile(user: any) {
   };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withLogger(async function GET(req: NextRequest) {
   try {
     await connectDb();
     const auth = await getAuthUser(req);
@@ -33,9 +34,9 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load profile');
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withLogger(async function PATCH(req: NextRequest) {
   try {
     await connectDb();
     const auth = await getAuthUser(req);
@@ -65,4 +66,4 @@ export async function PATCH(req: NextRequest) {
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not update profile');
   }
-}
+});

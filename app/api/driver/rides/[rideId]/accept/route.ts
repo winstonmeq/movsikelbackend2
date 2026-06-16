@@ -5,6 +5,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { haversineDistanceMeters } from '@/lib/geo';
 import { fail, ok } from '@/lib/http';
 import { emitToUser } from '@/lib/realtime';
+import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 
@@ -27,7 +28,7 @@ function pointToLatLng(point: unknown) {
   return { lat, lng };
 }
 
-export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
+export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
   try {
     await connectDb();
     let auth;
@@ -102,4 +103,4 @@ export async function POST(req: NextRequest, context: { params: Promise<{ rideId
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not accept ride');
   }
-}
+});

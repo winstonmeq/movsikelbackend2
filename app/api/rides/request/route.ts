@@ -8,11 +8,10 @@ import { isValidLatLng } from '@/lib/geo';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers } from '@/lib/realtime';
 import { startDispatch } from '@/lib/dispatch';
-import { dummyDriverEnabled, ensureDummyDriverNearPickup, scheduleDummyRideSimulation } from '@/lib/dummyDriver';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 
-const DUMMY_DRIVER_PHONE = '09000000000';
+import { withLogger } from '@/lib/logger';
 
 const locSchema = z.object({
   label: z.string().optional(),
@@ -48,7 +47,6 @@ async function findNearbyRealDrivers(pickup: { lat: number; lng: number }, radiu
   return User.find({
     role: 'driver',
     ...onlineDriverFilter(),
-    phone: { $ne: DUMMY_DRIVER_PHONE },
     currentLocation: {
       $near: {
         $geometry: { type: 'Point', coordinates: [pickup.lng, pickup.lat] },
@@ -64,7 +62,6 @@ async function findAnyOnlineRealDrivers() {
   return User.find({
     role: 'driver',
     ...onlineDriverFilter(),
-    phone: { $ne: DUMMY_DRIVER_PHONE },
     currentLocation: { $exists: true }
   })
     .select('name phone vehicleType plateNumber tricycleNumber currentLocation heading')
@@ -72,7 +69,7 @@ async function findAnyOnlineRealDrivers() {
     .limit(10);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withLogger(async function POST(req: NextRequest) {
   try {
     await connectDb();
     let auth;
@@ -88,27 +85,18 @@ export async function POST(req: NextRequest) {
       return fail('Invalid pickup or destination coordinates');
     }
 
-    const simulatorEnabled = dummyDriverEnabled();
     const radiusMeters = body.searchRadiusMeters || Number(process.env.DRIVER_SEARCH_RADIUS_METERS || 15000);
 
     const driversForRequest = [...(await findNearbyRealDrivers(body.pickup, radiusMeters))];
     let searchExpanded = false;
 
-    // Development/testing fallback: opt in only when emulator phones are not close to the pickup.
     if (
-      !simulatorEnabled &&
       driversForRequest.length === 0 &&
       String(process.env.DISPATCH_ALL_ONLINE_DRIVERS_IF_NONE_NEARBY || 'false').toLowerCase() === 'true'
     ) {
       const onlineDrivers = await findAnyOnlineRealDrivers();
       driversForRequest.push(...onlineDrivers);
       searchExpanded = onlineDrivers.length > 0;
-    }
-
-    if (simulatorEnabled) {
-      const dummyDriver = await ensureDummyDriverNearPickup(body.pickup);
-      const alreadyIncluded = driversForRequest.some((driver) => String(driver._id) === String(dummyDriver._id));
-      if (!alreadyIncluded) driversForRequest.unshift(dummyDriver as any);
     }
 
     const candidateDriverIds = driversForRequest.map((driver) => driver._id);
@@ -123,10 +111,6 @@ export async function POST(req: NextRequest) {
     const offeredFare = body.rideType === 'book' && body.offeredFare ? cleanMoney(body.offeredFare) : undefined;
     const passengerCount = body.passengerCount;
 
-    // Staged dispatch: the full nearest-first queue is stored, but only the
-    // first batch is offered initially (startDispatch sets candidateDriverIds
-    // to that batch and notifies them). With the simulator on, keep the dummy
-    // driver first so it can auto-accept.
     const dispatchQueue = candidateDriverIds;
 
     const ride = await Ride.create({
@@ -154,7 +138,6 @@ export async function POST(req: NextRequest) {
       ride: offeredRide,
       passenger: { id: auth.sub, name: auth.name, phone: auth.phone },
       nearbyDrivers: driversForRequest,
-      simulator: simulatorEnabled,
       searchExpanded
     };
 
@@ -165,25 +148,15 @@ export async function POST(req: NextRequest) {
       emitToUsers(offeredNow.map(String), 'ride:request', payload);
     }
 
-    if (simulatorEnabled) {
-      scheduleDummyRideSimulation(String(ride._id));
-    }
-
     return ok(
       {
         ride: offeredRide,
         notifiedDrivers: offeredNow.length,
-        searchExpanded,
-        simulator: simulatorEnabled
-          ? {
-              enabled: true,
-              message: 'Dummy driver will accept this ride automatically.'
-            }
-          : { enabled: false }
+        searchExpanded
       },
       201
     );
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Ride request failed');
   }
-}
+});

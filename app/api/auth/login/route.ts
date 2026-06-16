@@ -7,6 +7,8 @@ import { fail, ok } from '@/lib/http';
 import { normalizePhone } from '@/lib/phone';
 import { User } from '@/models/User';
 
+import { withLogger } from '@/lib/logger';
+
 const schema = z.object({
   phone: z.string().trim().min(6, 'Phone number must be at least 6 digits.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
@@ -19,7 +21,7 @@ function formatValidationError(error: z.ZodError) {
     .join(' ');
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withLogger(async function POST(req: NextRequest) {
   try {
     await connectDb();
 
@@ -75,4 +77,4 @@ export async function POST(req: NextRequest) {
     console.error('Login failed:', err);
     return fail('Login failed. Check the backend terminal for details.', 500);
   }
-}
+});

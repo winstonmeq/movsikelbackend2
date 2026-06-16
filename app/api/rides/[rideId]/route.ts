@@ -4,9 +4,10 @@ import { connectDb } from '@/lib/db';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { progressDispatchIfNeeded } from '@/lib/dispatch';
+import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
 
-export async function GET(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
+export const GET = withLogger(async function GET(req: NextRequest, context?: any) {
   try {
     await connectDb();
     let auth;
@@ -20,8 +21,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ rideId:
     const { rideId } = await context.params;
     if (!mongoose.Types.ObjectId.isValid(rideId)) return fail('Invalid ride id');
 
-    // The passenger polls this while waiting, which conveniently ticks dispatch
-    // forward (offer next driver / mark no_drivers) even when no driver is polling.
     await progressDispatchIfNeeded(rideId);
 
     const ride = await Ride.findById(rideId).populate(
@@ -36,4 +35,4 @@ export async function GET(req: NextRequest, context: { params: Promise<{ rideId:
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load ride');
   }
-}
+});
