@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDb } from '@/lib/db';
 import { fail, ok } from '@/lib/http';
-import { requireActiveUser, statusForAuthError, onlineFreshnessMs } from '@/lib/account';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { progressDispatchIfNeeded } from '@/lib/dispatch';
 import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
@@ -22,14 +22,16 @@ export const GET = withLogger(async function GET(req: NextRequest) {
     const driverObjectId = new mongoose.Types.ObjectId(auth.sub);
     const driver = await User.findById(auth.sub).select('online currentLocation lastSeenAt');
     if (!driver) return fail('Driver not found', 404);
-    // Treat online as fresh: a stale "online" flag (app closed, no recent ping)
-    // doesn't count. The driver app pings on poll, which keeps lastSeenAt fresh.
-    const lastSeen = driver.lastSeenAt ? new Date(driver.lastSeenAt).getTime() : 0;
-    const isFreshOnline = driver.online === true && Date.now() - lastSeen < onlineFreshnessMs();
-    if (!isFreshOnline) return ok({ rides: [], online: false });
 
-    // An actively-polling online driver is present; refresh their freshness so
-    // they stay "online" even between location pings.
+    // If the driver toggled themselves offline, respect that.
+    if (driver.online !== true) return ok({ rides: [], online: false });
+
+    // The driver is online AND actively polling right now — that IS the proof of
+    // presence. Always refresh lastSeenAt here, even if it had gone stale. This
+    // prevents the "stale trap" where a driver who briefly aged past the window
+    // could never recover without manually toggling online again. The freshness
+    // window's real job is to drop drivers whose app is CLOSED (not polling at
+    // all) — not to lock out a driver who is clearly present and polling.
     await User.findByIdAndUpdate(auth.sub, { lastSeenAt: new Date() });
 
     // Lazy dispatch progression: advance any requested ride whose current offer
