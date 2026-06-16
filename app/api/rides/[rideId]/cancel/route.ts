@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDb } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { emitToUsers } from '@/lib/realtime';
 import { Ride } from '@/models/Ride';
@@ -9,7 +9,12 @@ import { Ride } from '@/models/Ride';
 export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'passenger') return fail('Only passengers can cancel passenger rides', 403);
 
     const { rideId } = await context.params;

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { User } from '@/models/User';
 
@@ -31,11 +32,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'driver') return fail('Only drivers can update availability', 403);
 
     const body = schema.parse(await req.json());
-    const update: Record<string, unknown> = { online: body.online };
+    // Going online refreshes lastSeenAt so the freshness window starts now.
+    // Going offline clears it.
+    const update: Record<string, unknown> = {
+      online: body.online,
+      lastSeenAt: body.online ? new Date() : null
+    };
 
     if (typeof body.lat === 'number' && typeof body.lng === 'number') {
       if (!isValidLatLng({ lat: body.lat, lng: body.lng })) return fail('Invalid driver location');

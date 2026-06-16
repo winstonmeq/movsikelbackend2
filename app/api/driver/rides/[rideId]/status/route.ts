@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { connectDb } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { emitToUser } from '@/lib/realtime';
 import { Ride, type RideStatus } from '@/models/Ride';
@@ -13,7 +13,12 @@ const schema = z.object({ status: z.enum(['arrived', 'in_progress', 'completed',
 export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'driver') return fail('Only drivers can update ride status', 403);
 
     const { rideId } = await context.params;

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { fail, ok } from '@/lib/http';
 import { signToken } from '@/lib/auth';
+import { normalizePhone, isValidPhone } from '@/lib/phone';
 import { User } from '@/models/User';
 
 const schema = z.object({
@@ -17,10 +18,6 @@ const schema = z.object({
   plateNumber: z.string().trim().optional(),
   tricycleNumber: z.string().trim().optional()
 });
-
-function normalizePhone(value: unknown) {
-  return String(value ?? '').replace(/[\s-]/g, '').trim();
-}
 
 function formatValidationError(error: z.ZodError) {
   return error.issues
@@ -47,6 +44,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = parsed.data;
+    if (!isValidPhone(body.phone)) {
+      return fail('Please enter a valid PH mobile number (e.g. 09171234567).', 400);
+    }
+
     const existing = await User.findOne({ phone: body.phone });
     if (existing) return fail('Phone number already registered. Please log in instead.', 409);
 
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       phone: body.phone,
       passwordHash,
       role: body.role,
+      status: 'active',
       vehicleType: body.role === 'driver' ? body.vehicleType || 'Tricycle' : undefined,
       plateNumber: body.role === 'driver' ? body.plateNumber : undefined,
       tricycleNumber: body.role === 'driver' ? body.tricycleNumber : undefined
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         phone: user.phone,
         role: user.role,
+        status: user.status,
         homeBarangay: user.homeBarangay,
         homeAddress: user.homeAddress,
         vehicleType: user.vehicleType,

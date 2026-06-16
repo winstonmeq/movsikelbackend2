@@ -1,18 +1,28 @@
 import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDb } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
+import { progressDispatchIfNeeded } from '@/lib/dispatch';
 import { Ride } from '@/models/Ride';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'passenger') return fail('Only passengers can view passenger rides', 403);
 
     const { rideId } = await context.params;
     if (!mongoose.Types.ObjectId.isValid(rideId)) return fail('Invalid ride id');
+
+    // The passenger polls this while waiting, which conveniently ticks dispatch
+    // forward (offer next driver / mark no_drivers) even when no driver is polling.
+    await progressDispatchIfNeeded(rideId);
 
     const ride = await Ride.findById(rideId).populate(
       'driverId',

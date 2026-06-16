@@ -1,18 +1,21 @@
 import mongoose from 'mongoose';
 
-export type UserRole = 'passenger' | 'driver';
+export type UserRole = 'passenger' | 'driver' | 'admin';
+export type UserStatus = 'active' | 'suspended' | 'banned';
 
 export interface IUser {
   name: string;
   phone: string;
   passwordHash: string;
   role: UserRole;
+  status: UserStatus;
   homeBarangay?: string;
   homeAddress?: string;
   vehicleType?: string;
   plateNumber?: string;
   tricycleNumber?: string;
   online: boolean;
+  lastSeenAt?: Date;
   currentLocation?: {
     type: 'Point';
     coordinates: [number, number];
@@ -35,13 +38,15 @@ const userSchema = new mongoose.Schema<IUser>(
     name: { type: String, required: true, trim: true },
     phone: { type: String, required: true, unique: true, index: true, trim: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['passenger', 'driver'], required: true, index: true },
+    role: { type: String, enum: ['passenger', 'driver', 'admin'], required: true, index: true },
+    status: { type: String, enum: ['active', 'suspended', 'banned'], default: 'active', index: true },
     homeBarangay: { type: String, trim: true },
     homeAddress: { type: String, trim: true },
     vehicleType: { type: String, default: 'Tricycle' },
     plateNumber: { type: String },
     tricycleNumber: { type: String },
     online: { type: Boolean, default: false, index: true },
+    lastSeenAt: { type: Date, index: true },
     currentLocation: { type: pointSchema },
     heading: { type: Number }
   },

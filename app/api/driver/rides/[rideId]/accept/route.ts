@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { connectDb } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { haversineDistanceMeters } from '@/lib/geo';
 import { fail, ok } from '@/lib/http';
 import { emitToUser } from '@/lib/realtime';
@@ -30,7 +30,12 @@ function pointToLatLng(point: unknown) {
 export async function POST(req: NextRequest, context: { params: Promise<{ rideId: string }> }) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'driver') return fail('Only drivers can accept rides', 403);
 
     const { rideId } = await context.params;
@@ -45,15 +50,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ rideId
     if (driver.online !== true) return fail('Go online before accepting a ride', 409);
 
     const existingRide = await Ride.findOne({ _id: new mongoose.Types.ObjectId(rideId), status: 'requested' })
-      .select('candidateDriverIds passengerId pickup')
+      .select('currentOfferDriverIds candidateDriverIds passengerId pickup')
       .lean();
 
     if (!existingRide) return fail('Ride is no longer available', 409);
 
-    const candidateIds = ((existingRide as any).candidateDriverIds || []).map(String);
-    const isCandidate = candidateIds.includes(String(driverObjectId));
-    if (candidateIds.length > 0 && !isCandidate && !allowOpenRideAccept()) {
-      return fail('This ride was not assigned to your driver app', 403);
+    // With staged dispatch, a driver may only accept while the ride is currently
+    // offered to them. (candidateDriverIds mirrors currentOfferDriverIds.)
+    const offeredIds = ((existingRide as any).currentOfferDriverIds || []).map(String);
+    const isOffered = offeredIds.includes(String(driverObjectId));
+    if (offeredIds.length > 0 && !isOffered && !allowOpenRideAccept()) {
+      return fail('This ride is no longer offered to you', 409);
     }
 
     const driverLocation = pointToLatLng((driver as any).currentLocation);
@@ -74,7 +81,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ rideId
         driverId: driverObjectId,
         status: 'accepted',
         acceptedAt: new Date(),
-        $addToSet: { candidateDriverIds: driverObjectId }
+        // Dispatch is over once accepted — clear the offer state.
+        currentOfferDriverIds: [],
+        candidateDriverIds: [driverObjectId],
+        offerExpiresAt: undefined
       },
       { returnDocument: 'after' }
     )

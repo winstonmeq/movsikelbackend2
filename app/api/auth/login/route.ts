@@ -4,17 +4,14 @@ import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { signToken } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
+import { normalizePhone } from '@/lib/phone';
 import { User } from '@/models/User';
 
 const schema = z.object({
   phone: z.string().trim().min(6, 'Phone number must be at least 6 digits.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['passenger', 'driver']).optional()
+  role: z.enum(['passenger', 'driver', 'admin']).optional()
 });
-
-function normalizePhone(value: unknown) {
-  return String(value ?? '').replace(/[\s-]/g, '').trim();
-}
 
 function formatValidationError(error: z.ZodError) {
   return error.issues
@@ -28,8 +25,6 @@ export async function POST(req: NextRequest) {
 
     const raw = await req.json().catch(() => null);
 
-    console.log('Login request body:', raw);
-    
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       return fail('Invalid request body. Send JSON with phone and password.', 400);
     }
@@ -44,12 +39,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = parsed.data;
-    const user = await User.findOne({phone: body.phone });
+    const user = await User.findOne({ phone: body.phone });
     if (!user) return fail('Invalid phone or password', 401);
     if (body.role && user.role !== body.role) return fail('Account role does not match this app', 403);
 
     const matches = await bcrypt.compare(body.password, user.passwordHash);
     if (!matches) return fail('Invalid phone or password', 401);
+
+    if (user.status === 'banned') return fail('This account has been banned. Contact support.', 403);
+    if (user.status === 'suspended') return fail('This account is suspended. Contact support.', 403);
 
     const token = await signToken({
       sub: String(user._id),
@@ -65,6 +63,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         phone: user.phone,
         role: user.role,
+        status: user.status,
         homeBarangay: user.homeBarangay,
         homeAddress: user.homeAddress,
         vehicleType: user.vehicleType,

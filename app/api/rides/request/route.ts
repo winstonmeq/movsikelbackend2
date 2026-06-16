@@ -2,10 +2,12 @@ import { NextRequest } from 'next/server';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { connectDb } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { isValidLatLng } from '@/lib/geo';
+import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers } from '@/lib/realtime';
+import { startDispatch } from '@/lib/dispatch';
 import { dummyDriverEnabled, ensureDummyDriverNearPickup, scheduleDummyRideSimulation } from '@/lib/dummyDriver';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
@@ -45,7 +47,7 @@ function cleanMoney(value: number) {
 async function findNearbyRealDrivers(pickup: { lat: number; lng: number }, radiusMeters: number) {
   return User.find({
     role: 'driver',
-    online: true,
+    ...onlineDriverFilter(),
     phone: { $ne: DUMMY_DRIVER_PHONE },
     currentLocation: {
       $near: {
@@ -61,7 +63,7 @@ async function findNearbyRealDrivers(pickup: { lat: number; lng: number }, radiu
 async function findAnyOnlineRealDrivers() {
   return User.find({
     role: 'driver',
-    online: true,
+    ...onlineDriverFilter(),
     phone: { $ne: DUMMY_DRIVER_PHONE },
     currentLocation: { $exists: true }
   })
@@ -73,7 +75,12 @@ async function findAnyOnlineRealDrivers() {
 export async function POST(req: NextRequest) {
   try {
     await connectDb();
-    const auth = await getAuthUser(req);
+    let auth;
+    try {
+      ({ auth } = await requireActiveUser(req));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : 'Unauthorized', statusForAuthError(err));
+    }
     if (auth.role !== 'passenger') return fail('Only passengers can request rides', 403);
 
     const body = schema.parse(await req.json());
@@ -110,11 +117,17 @@ export async function POST(req: NextRequest) {
     if (body.rideType === 'book' && (!body.offeredFare || body.offeredFare <= 0)) {
       return fail('Fare offer is required for Booking Ride.');
     }
-    if (body.rideType === 'book' && (!body.passengerCount || body.passengerCount < 1)) {
-      return fail('Number of passengers is required for Booking Ride.');
+    if (!body.passengerCount || body.passengerCount < 1) {
+      return fail('Number of passengers is required (at least 1).');
     }
     const offeredFare = body.rideType === 'book' && body.offeredFare ? cleanMoney(body.offeredFare) : undefined;
-    const passengerCount = body.rideType === 'book' ? body.passengerCount : undefined;
+    const passengerCount = body.passengerCount;
+
+    // Staged dispatch: the full nearest-first queue is stored, but only the
+    // first batch is offered initially (startDispatch sets candidateDriverIds
+    // to that batch and notifies them). With the simulator on, keep the dummy
+    // driver first so it can auto-accept.
+    const dispatchQueue = candidateDriverIds;
 
     const ride = await Ride.create({
       passengerId: new mongoose.Types.ObjectId(auth.sub),
@@ -127,18 +140,30 @@ export async function POST(req: NextRequest) {
       offeredFare,
       distanceMeters: body.distanceMeters,
       durationSeconds: body.durationSeconds,
-      candidateDriverIds
+      candidateDriverIds: [],
+      dispatchQueue,
+      dispatchIndex: 0,
+      currentOfferDriverIds: []
     });
 
+    // Offer to the first batch (or mark no_drivers if the queue is empty).
+    const dispatched = await startDispatch(String(ride._id));
+    const offeredRide = dispatched || ride;
+
     const payload = {
-      ride,
+      ride: offeredRide,
       passenger: { id: auth.sub, name: auth.name, phone: auth.phone },
       nearbyDrivers: driversForRequest,
       simulator: simulatorEnabled,
       searchExpanded
     };
 
-    emitToUsers(candidateDriverIds.map(String), 'ride:request', payload);
+    // startDispatch already notified the currently-offered drivers; this keeps
+    // the richer payload (passenger info) flowing to them too.
+    const offeredNow = (offeredRide as any).currentOfferDriverIds || [];
+    if (offeredNow.length > 0) {
+      emitToUsers(offeredNow.map(String), 'ride:request', payload);
+    }
 
     if (simulatorEnabled) {
       scheduleDummyRideSimulation(String(ride._id));
@@ -146,8 +171,8 @@ export async function POST(req: NextRequest) {
 
     return ok(
       {
-        ride,
-        notifiedDrivers: driversForRequest.length,
+        ride: offeredRide,
+        notifiedDrivers: offeredNow.length,
         searchExpanded,
         simulator: simulatorEnabled
           ? {

@@ -8,7 +8,8 @@ export type RideStatus =
   | 'arrived'
   | 'in_progress'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'no_drivers';
 
 export interface IRideLocation {
   label?: string;
@@ -32,6 +33,14 @@ export interface IRide {
   distanceMeters?: number;
   durationSeconds?: number;
   candidateDriverIds: mongoose.Types.ObjectId[];
+  declinedDriverIds: mongoose.Types.ObjectId[];
+  // Staged sequential dispatch: an ordered queue of drivers (nearest first),
+  // how far we've offered, who is currently being offered, and when the
+  // current offer lapses. Advanced lazily when routes are polled.
+  dispatchQueue: mongoose.Types.ObjectId[];
+  dispatchIndex: number;
+  currentOfferDriverIds: mongoose.Types.ObjectId[];
+  offerExpiresAt?: Date;
   acceptedAt?: Date;
   arrivedAt?: Date;
   startedAt?: Date;
@@ -61,7 +70,7 @@ const rideSchema = new mongoose.Schema<IRide>(
     destination: { type: locationSchema, required: true },
     status: {
       type: String,
-      enum: ['requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'],
+      enum: ['requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled', 'no_drivers'],
       default: 'requested',
       index: true
     },
@@ -77,6 +86,11 @@ const rideSchema = new mongoose.Schema<IRide>(
     distanceMeters: { type: Number },
     durationSeconds: { type: Number },
     candidateDriverIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    declinedDriverIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
+    dispatchQueue: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    dispatchIndex: { type: Number, default: 0 },
+    currentOfferDriverIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
+    offerExpiresAt: { type: Date },
     acceptedAt: { type: Date },
     arrivedAt: { type: Date },
     startedAt: { type: Date },
