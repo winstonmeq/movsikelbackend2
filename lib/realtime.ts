@@ -1,13 +1,14 @@
-import * as admin from 'firebase-admin';
+import { App, initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { connectDb } from './db';
 import { User } from '@/models/User';
 
-let _app: admin.app.App | null = null;
+let _app: App | null = null;
 
-function getApp(): admin.app.App | null {
+function getApp(): App | null {
   if (_app) return _app;
-  if (admin.apps.length > 0) {
-    _app = admin.apps[0]!;
+  if (getApps().length > 0) {
+    _app = getApps()[0]!;
     return _app;
   }
 
@@ -19,7 +20,7 @@ function getApp(): admin.app.App | null {
 
   try {
     const serviceAccount = JSON.parse(raw);
-    _app = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    _app = initializeApp({ credential: cert(serviceAccount) });
     return _app;
   } catch (err) {
     console.error('[realtime] Failed to initialize Firebase Admin:', err);
@@ -41,7 +42,7 @@ export async function emitToUser(userId: string, event: string, payload: unknown
     const token = (user as any)?.fcmToken as string | undefined;
     if (!token) return;
 
-    await admin.messaging(app).send({
+    await getMessaging(app).send({
       token,
       data: {
         event,
