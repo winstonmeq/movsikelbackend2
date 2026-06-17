@@ -3,6 +3,8 @@ import { connectDb } from '@/lib/db';
 import { ok } from '@/lib/http';
 import { withAdmin, parsePaging } from '@/lib/admin';
 import { Ride } from '@/models/Ride';
+import { User } from '@/models/User';
+void User; // register User schema for .populate()
 
 const STATUSES = ['requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled', 'no_drivers'];
 

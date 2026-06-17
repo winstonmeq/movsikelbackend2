@@ -7,6 +7,8 @@ import { fail, ok } from '@/lib/http';
 import { emitToUser } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
 import { Ride, type RideStatus } from '@/models/Ride';
+import { User } from '@/models/User';
+void User; // register User schema for .populate()
 
 const allowedStatuses: RideStatus[] = ['arrived', 'in_progress', 'completed', 'cancelled'];
 const schema = z.object({ status: z.enum(['arrived', 'in_progress', 'completed', 'cancelled']) });

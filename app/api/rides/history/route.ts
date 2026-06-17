@@ -4,7 +4,13 @@ import { connectDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
 import { Ride } from '@/models/Ride';
+import { User } from '@/models/User';
 import { withLogger } from '@/lib/logger';
+
+// Touch the User model so it's registered with Mongoose before .populate()
+// resolves the 'driverId' reference. Without this, a cold-start request to this
+// route throws: Schema hasn't been registered for model "User".
+void User;
 
 export const GET = withLogger(async function GET(req: NextRequest) {
   try {
