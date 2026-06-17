@@ -19,6 +19,10 @@ ios/Pods
 .env.local
 .env.production
 
+# Firebase service account (contains private key — never commit)
+firebase-adminsdk.json
+*-adminsdk-*.json
+
 # Archives
 *.zip
 

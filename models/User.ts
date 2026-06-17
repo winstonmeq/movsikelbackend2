@@ -7,6 +7,9 @@ export interface IUser {
   name: string;
   phone: string;
   passwordHash: string;
+  googleId?: string;
+  email?: string;
+  fcmToken?: string;
   role: UserRole;
   status: UserStatus;
   homeBarangay?: string;
@@ -37,7 +40,10 @@ const userSchema = new mongoose.Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
     phone: { type: String, required: true, unique: true, index: true, trim: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, default: '' },
+    googleId: { type: String, sparse: true, index: true },
+    email: { type: String, trim: true, sparse: true, index: true },
+    fcmToken: { type: String },
     role: { type: String, enum: ['passenger', 'driver', 'admin'], required: true, index: true },
     status: { type: String, enum: ['active', 'suspended', 'banned'], default: 'active', index: true },
     homeBarangay: { type: String, trim: true },
