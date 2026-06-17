@@ -1,23 +1,6 @@
 import { NextRequest } from 'next/server';
 import { fail, ok } from '@/lib/http';
-
-// Kidapawan service-area box (same as the places routes) — a pinned drop-off
-// outside the city is rejected so it stays consistent with search.
-const KIDAPAWAN_BOUNDS = {
-  minLat: 6.86,
-  maxLat: 7.16,
-  minLng: 124.94,
-  maxLng: 125.24
-};
-
-function isInsideKidapawan(lat: number, lng: number) {
-  return (
-    lat >= KIDAPAWAN_BOUNDS.minLat &&
-    lat <= KIDAPAWAN_BOUNDS.maxLat &&
-    lng >= KIDAPAWAN_BOUNDS.minLng &&
-    lng <= KIDAPAWAN_BOUNDS.maxLng
-  );
-}
+import { isInsideKidapawan } from '@/lib/kidapawan';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,9 +8,12 @@ export async function GET(req: NextRequest) {
     if (!key) return fail('Missing GOOGLE_MAPS_API_KEY', 500);
 
     const { searchParams } = new URL(req.url);
-    const lat = Number(searchParams.get('lat'));
-    const lng = Number(searchParams.get('lng'));
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return fail('lat and lng are required');
+    const rawLat = searchParams.get('lat');
+    const rawLng = searchParams.get('lng');
+    if (rawLat === null || rawLng === null) return fail('lat and lng are required', 400);
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return fail('lat and lng must be valid numbers', 400);
 
     if (!isInsideKidapawan(lat, lng)) {
       return fail('That location is outside the Kidapawan City service area.', 422);
@@ -37,10 +23,14 @@ export async function GET(req: NextRequest) {
     const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
     const json = await response.json();
 
+    if (json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
+      return fail(json.error_message || `Reverse geocode error: ${json.status}`, 502);
+    }
+
     // Fall back to coordinates if Google can't name the spot — the exact lat/lng
     // is what the driver actually navigates to, so a missing address is fine.
     const first = Array.isArray(json.results) && json.results.length > 0 ? json.results[0] : null;
-    const address = first?.formatted_address || `Pinned location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+    const address = first?.formatted_address || `Pinned location (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
 
     return ok({
       place: {

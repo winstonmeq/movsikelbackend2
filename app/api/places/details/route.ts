@@ -1,25 +1,6 @@
 import { NextRequest } from 'next/server';
 import { fail, ok } from '@/lib/http';
-
-// --- Kidapawan City service area (bounding box) ------------------------------
-// A selected place must fall inside this box, otherwise it's outside the pilot
-// service area and is rejected. This is the HARD limit (autocomplete only
-// biases; this enforces). Box is ~the 358 km² city + a small buffer.
-const KIDAPAWAN_BOUNDS = {
-  minLat: 6.86,
-  maxLat: 7.16,
-  minLng: 124.94,
-  maxLng: 125.24
-};
-
-function isInsideKidapawan(lat: number, lng: number) {
-  return (
-    lat >= KIDAPAWAN_BOUNDS.minLat &&
-    lat <= KIDAPAWAN_BOUNDS.maxLat &&
-    lng >= KIDAPAWAN_BOUNDS.minLng &&
-    lng <= KIDAPAWAN_BOUNDS.maxLng
-  );
-}
+import { isInsideKidapawan } from '@/lib/kidapawan';
 
 function cleanSessionToken(value: string | null) {
   const token = (value || '').trim();

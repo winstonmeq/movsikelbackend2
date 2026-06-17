@@ -32,7 +32,7 @@ export const GET = withLogger(async function GET(req: NextRequest) {
     // could never recover without manually toggling online again. The freshness
     // window's real job is to drop drivers whose app is CLOSED (not polling at
     // all) — not to lock out a driver who is clearly present and polling.
-    await User.findByIdAndUpdate(auth.sub, { lastSeenAt: new Date() });
+    await User.updateOne({ _id: auth.sub }, { $set: { lastSeenAt: new Date() } });
 
     // Lazy dispatch progression: advance any requested ride whose current offer
     // window has expired. This is what moves an unaccepted ride from one driver
