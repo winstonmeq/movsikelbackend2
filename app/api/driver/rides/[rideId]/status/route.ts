@@ -62,7 +62,19 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
 
     const update = { ride };
     const passengerId = String((ride as any).passengerId?._id || (ride as any).passengerId);
-    emitToUser(passengerId, 'ride:update', update);
+
+    // Contextual heads-up alert for the passenger on the milestones they care
+    // about; silent in-app sync for the rest.
+    const passengerNote =
+      nextStatus === 'arrived'
+        ? { title: 'Driver has arrived', body: 'Your driver is at the pickup location.' }
+        : nextStatus === 'in_progress'
+        ? { title: 'Ride started', body: 'You are on your way to your destination.' }
+        : nextStatus === 'completed'
+        ? { title: 'Ride completed', body: 'Thank you for riding with MovSikel.' }
+        : undefined;
+
+    emitToUser(passengerId, 'ride:update', update, passengerNote);
     emitToUser(auth.sub, 'ride:update', update);
 
     return ok(update);

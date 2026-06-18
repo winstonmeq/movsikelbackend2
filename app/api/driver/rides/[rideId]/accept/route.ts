@@ -96,7 +96,13 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
 
     const update = { ride, driver };
     const passengerId = String((ride as any).passengerId?._id || (ride as any).passengerId);
-    emitToUser(passengerId, 'ride:update', update);
+    // Heads-up tray alert for the passenger (their request was just accepted) so
+    // they notice even if the app is backgrounded. The driver's own copy is a
+    // silent in-app sync.
+    emitToUser(passengerId, 'ride:update', update, {
+      title: 'Driver on the way',
+      body: `${(driver as any).name || 'Your driver'} accepted your ride and is heading to your pickup.`
+    });
     emitToUser(auth.sub, 'ride:update', update);
 
     return ok(update);
