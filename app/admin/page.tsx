@@ -37,7 +37,7 @@ type Stats = {
 export default function AdminDashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads'>('overview');
 
   useEffect(() => {
     if (!getToken()) {
@@ -84,7 +84,8 @@ export default function AdminDashboard() {
             { label: 'Overview', value: 'overview' },
             { label: 'Users', value: 'users' },
             { label: 'Rides', value: 'rides' },
-            { label: 'Live Map', value: 'livemap' }
+            { label: 'Live Map', value: 'livemap' },
+            { label: 'Ads', value: 'ads' }
           ]}
         />
       </div>
@@ -93,6 +94,7 @@ export default function AdminDashboard() {
       {tab === 'users' && <Users />}
       {tab === 'rides' && <Rides />}
       {tab === 'livemap' && <LiveMap />}
+      {tab === 'ads' && <Ads />}
     </div>
   );
 }
@@ -614,6 +616,254 @@ function LiveMap() {
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div id="admin-live-map" style={{ height: 520, width: '100%' }} />
       </Card>
+    </div>
+  );
+}
+
+type Ad = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl: string;
+  active: boolean;
+  order: number;
+  createdAt: string;
+};
+
+function Ads() {
+  const [ads, setAds] = useState<Ad[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState<Ad | 'new' | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await adminFetch<{ ads: Ad[] }>('/api/admin/ads');
+      setAds(data.ads);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function toggleActive(ad: Ad) {
+    try {
+      await adminFetch(`/api/admin/ads/${ad.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: !ad.active })
+      });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  }
+
+  async function remove(ad: Ad) {
+    if (!window.confirm(`Delete "${ad.title}"? This cannot be undone.`)) return;
+    try {
+      await adminFetch(`/api/admin/ads/${ad.id}`, { method: 'DELETE' });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  }
+
+  return (
+    <div>
+      <Card style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <strong>“Check this out” promos</strong>
+          <p style={{ margin: '2px 0 0', color: colors.muted, fontSize: 13 }}>
+            Shown in the passenger app dashboard. Tapping an active promo opens its link.
+          </p>
+        </div>
+        <Button onClick={() => setEditing('new')}>+ New ad</Button>
+      </Card>
+
+      {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
+
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                <Th>Image</Th>
+                <Th>Title</Th>
+                <Th>Link</Th>
+                <Th>Order</Th>
+                <Th>Active</Th>
+                <Th>Actions</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {ads.map((ad) => (
+                <tr key={ad.id} style={{ borderTop: `1px solid ${colors.border}` }}>
+                  <Td>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={ad.imageUrl}
+                      alt={ad.title}
+                      style={{ width: 72, height: 44, objectFit: 'cover', borderRadius: 6, background: colors.bg }}
+                    />
+                  </Td>
+                  <Td>{ad.title}</Td>
+                  <Td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <a href={ad.linkUrl} target="_blank" rel="noreferrer" style={{ color: colors.primary }}>
+                      {ad.linkUrl}
+                    </a>
+                  </Td>
+                  <Td>{ad.order}</Td>
+                  <Td>
+                    <button
+                      onClick={() => toggleActive(ad)}
+                      style={{
+                        cursor: 'pointer',
+                        border: 'none',
+                        borderRadius: 999,
+                        padding: '2px 10px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: ad.active ? colors.ok : colors.muted,
+                        background: `${ad.active ? colors.ok : colors.muted}1a`
+                      }}
+                    >
+                      {ad.active ? 'Active' : 'Hidden'}
+                    </button>
+                  </Td>
+                  <Td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <Button variant="ghost" onClick={() => setEditing(ad)}>Edit</Button>
+                      <Button variant="danger" onClick={() => remove(ad)}>Delete</Button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+              {!loading && ads.length === 0 && (
+                <tr>
+                  <Td colSpan={6} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+                    No ads yet. Click “New ad” to add one.
+                  </Td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {editing && (
+        <AdModal
+          ad={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdModal({
+  ad,
+  onClose,
+  onSaved
+}: {
+  ad: Ad | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(ad?.title ?? '');
+  const [imageUrl, setImageUrl] = useState(ad?.imageUrl ?? '');
+  const [linkUrl, setLinkUrl] = useState(ad?.linkUrl ?? '');
+  const [order, setOrder] = useState(String(ad?.order ?? 0));
+  const [active, setActive] = useState(ad?.active ?? true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      const payload = {
+        title: title.trim(),
+        imageUrl: imageUrl.trim(),
+        linkUrl: linkUrl.trim(),
+        order: Number(order) || 0,
+        active
+      };
+      if (ad) {
+        await adminFetch(`/api/admin/ads/${ad.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      } else {
+        await adminFetch('/api/admin/ads', { method: 'POST', body: JSON.stringify(payload) });
+      }
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15,23,42,0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        zIndex: 50
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '100%' }}>
+        <Card>
+          <h2 style={{ margin: '0 0 16px', fontSize: 19 }}>{ad ? 'Edit ad' : 'New ad'}</h2>
+
+          <Field label="Title / label">
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Refer & ride" />
+          </Field>
+          <Field label="Image URL">
+            <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…/banner.jpg" />
+          </Field>
+          {imageUrl.trim() && (
+            <div style={{ marginBottom: 12 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt="preview"
+                style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 10, background: colors.bg }}
+              />
+            </div>
+          )}
+          <Field label="Facebook page or website URL">
+            <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://facebook.com/yourpage" />
+          </Field>
+          <Field label="Display order (lower shows first)">
+            <Input type="number" value={order} onChange={(e) => setOrder(e.target.value)} />
+          </Field>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 14 }}>
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            Active (visible in the passenger app)
+          </label>
+
+          {error && <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <Button onClick={save} disabled={busy}>{ad ? 'Save changes' : 'Create ad'}</Button>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
