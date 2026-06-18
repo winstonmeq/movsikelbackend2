@@ -127,7 +127,10 @@ async function applyStage(rideId: string, index: number) {
     { returnDocument: 'after' }
   ).lean();
 
-  emitToUsers(slice.map(String), 'ride:request', { ride: updated });
+  emitToUsers(slice.map(String), 'ride:request', { ride: updated }, {
+    title: 'New ride request',
+    body: 'A passenger nearby is requesting a ride. Tap to view.'
+  });
   return updated;
 }
 
