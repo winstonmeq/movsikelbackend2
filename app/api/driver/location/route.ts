@@ -6,6 +6,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { emitToUser } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
+import { setDriverLocation } from '@/lib/redis';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 
@@ -44,6 +45,9 @@ export const POST = withLogger(async function POST(req: NextRequest) {
       },
       { returnDocument: 'after' }
     ).select('name phone vehicleType plateNumber tricycleNumber currentLocation heading online');
+
+    // Write to Redis for fast live location reads (TTL 60s).
+    await setDriverLocation(auth.sub, body.lat, body.lng, body.heading);
 
     const activeRide = await Ride.findOne({
       driverId: auth.sub,
