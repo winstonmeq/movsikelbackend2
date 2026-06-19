@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { connectDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fail, ok } from '@/lib/http';
+import { getDriverLocation } from '@/lib/redis';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 void User; // register User schema for .populate()
@@ -21,8 +22,22 @@ export const GET = withLogger(async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .populate('driverId', 'name phone vehicleType plateNumber tricycleNumber currentLocation heading');
 
+    // Overlay Redis location on the driver if available — fresher than MongoDB.
+    if (ride?.driverId && typeof (ride.driverId as any)._id !== 'undefined') {
+      const driverId = String((ride.driverId as any)._id);
+      const redisLoc = await getDriverLocation(driverId);
+      if (redisLoc) {
+        (ride.driverId as any).currentLocation = {
+          type: 'Point',
+          coordinates: [redisLoc.lng, redisLoc.lat]
+        };
+        (ride.driverId as any).heading = redisLoc.heading;
+      }
+    }
+
     return ok({ ride });
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not load active ride');
   }
 });
+
