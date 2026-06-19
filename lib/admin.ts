@@ -1,11 +1,17 @@
 import type { NextRequest } from 'next/server';
 import { getAdminUser } from '@/lib/auth';
 import { fail } from '@/lib/http';
+import { onlineFreshnessMs } from '@/lib/account';
 
 /** Serializes a user document for admin views (never exposes passwordHash). */
 export function publicUserForAdmin(user: any) {
   if (!user) return null;
   const loc = user.currentLocation?.coordinates;
+  const freshWindow = new Date(Date.now() - onlineFreshnessMs());
+  const isOnline =
+    user.online === true &&
+    user.lastSeenAt != null &&
+    new Date(user.lastSeenAt) >= freshWindow;
   return {
     id: String(user._id),
     name: user.name,
@@ -17,7 +23,7 @@ export function publicUserForAdmin(user: any) {
     vehicleType: user.vehicleType ?? '',
     plateNumber: user.plateNumber ?? '',
     tricycleNumber: user.tricycleNumber ?? '',
-    online: Boolean(user.online),
+    online: isOnline,
     lat: Array.isArray(loc) ? loc[1] : null,
     lng: Array.isArray(loc) ? loc[0] : null,
     heading: typeof user.heading === 'number' ? user.heading : null,
