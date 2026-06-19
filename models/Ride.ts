@@ -49,6 +49,10 @@ export interface IRide {
   // Wallet: fee deducted and reward credited at completion (book rides only)
   feeCharged?: number;
   rewardGiven?: number;
+  // Passenger rating submitted after completion (book rides only)
+  rating?: number;         // 1–5 stars
+  ratingComment?: string;  // optional free-text
+  ratedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -100,7 +104,10 @@ const rideSchema = new mongoose.Schema<IRide>(
     completedAt: { type: Date },
     cancelledAt: { type: Date },
     feeCharged: { type: Number },
-    rewardGiven: { type: Number }
+    rewardGiven: { type: Number },
+    rating: { type: Number, min: 1, max: 5 },
+    ratingComment: { type: String, trim: true, maxlength: 500 },
+    ratedAt: { type: Date }
   },
   { timestamps: true }
 );

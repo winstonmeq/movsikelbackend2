@@ -37,7 +37,7 @@ type Stats = {
 export default function AdminDashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads' | 'wallet'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads' | 'wallet' | 'ratings'>('overview');
 
   useEffect(() => {
     if (!getToken()) {
@@ -87,6 +87,7 @@ export default function AdminDashboard() {
             { label: 'Live Map', value: 'livemap' },
             { label: 'Ads', value: 'ads' },
             { label: 'Wallet', value: 'wallet' },
+            { label: 'Ratings', value: 'ratings' },
           ]}
         />
       </div>
@@ -97,6 +98,7 @@ export default function AdminDashboard() {
       {tab === 'livemap' && <LiveMap />}
       {tab === 'ads' && <Ads />}
       {tab === 'wallet' && <Wallet />}
+      {tab === 'ratings' && <Ratings />}
     </div>
   );
 }
@@ -1206,6 +1208,221 @@ function Wallet() {
             </Card>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+type RatingRow = {
+  id: string;
+  driver: { id: string; name: string; phone: string; plateNumber: string };
+  passenger: { id: string; name: string };
+  rating: number;
+  comment: string;
+  ratedAt: string;
+  fare: number;
+  completedAt: string;
+};
+
+type DriverStat = {
+  driverId: string;
+  name: string;
+  phone: string;
+  averageRating: number;
+  totalRatings: number;
+  breakdown: Record<number, number>;
+};
+
+function Stars({ value }: { value: number }) {
+  return (
+    <span style={{ letterSpacing: 1, color: '#f59e0b', fontWeight: 700 }}>
+      {'★'.repeat(value)}
+      <span style={{ color: colors.border }}>{'★'.repeat(5 - value)}</span>
+    </span>
+  );
+}
+
+function Ratings() {
+  const [section, setSection] = useState<'reviews' | 'drivers'>('drivers');
+  const [rows, setRows] = useState<RatingRow[]>([]);
+  const [stats, setStats] = useState<DriverStat[]>([]);
+  const [driverFilter, setDriverFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async (p = 1) => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ page: String(p), limit: '30' });
+      if (driverFilter.trim()) params.set('driverId', driverFilter.trim());
+      const data = await adminFetch<{ rides: RatingRow[]; driverStats: DriverStat[]; pages: number; total: number }>(
+        `/api/admin/ratings?${params}`
+      );
+      setRows(data.rides);
+      setStats(data.driverStats);
+      setPages(data.pages);
+      setTotal(data.total);
+      setPage(p);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, [driverFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const avgAll = stats.length
+    ? (stats.reduce((s, d) => s + d.averageRating * d.totalRatings, 0) /
+       stats.reduce((s, d) => s + d.totalRatings, 0))
+    : 0;
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 16 }}>
+        {[
+          { label: 'Total ratings', value: String(total) },
+          { label: 'Drivers rated', value: String(stats.length) },
+          { label: 'Overall avg rating', value: total ? `${avgAll.toFixed(1)} ★` : '—' },
+        ].map(t => (
+          <Card key={t.label}>
+            <div style={{ color: colors.muted, fontSize: 12 }}>{t.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: colors.primary }}>{t.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Section tabs */}
+      <Card style={{ marginBottom: 16 }}>
+        <RoleTabs
+          value={section}
+          onChange={v => setSection(v as typeof section)}
+          options={[
+            { label: 'Driver leaderboard', value: 'drivers' },
+            { label: 'All reviews', value: 'reviews' },
+          ]}
+        />
+      </Card>
+
+      {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
+
+      {section === 'drivers' && (
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                  <Th>Driver</Th>
+                  <Th>Avg rating</Th>
+                  <Th>Total reviews</Th>
+                  <Th>5★</Th>
+                  <Th>4★</Th>
+                  <Th>3★</Th>
+                  <Th>2★</Th>
+                  <Th>1★</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map(d => (
+                  <tr key={d.driverId} style={{ borderTop: `1px solid ${colors.border}` }}>
+                    <Td>
+                      <div style={{ fontWeight: 600 }}>{d.name}</div>
+                      <div style={{ color: colors.muted, fontSize: 12 }}>{d.phone}</div>
+                    </Td>
+                    <Td>
+                      <span style={{ fontWeight: 800, fontSize: 16,
+                        color: d.averageRating >= 4 ? colors.ok : d.averageRating >= 3 ? colors.warn : colors.danger }}>
+                        {d.averageRating.toFixed(1)}
+                      </span>
+                      <span style={{ marginLeft: 4, color: '#f59e0b' }}>★</span>
+                    </Td>
+                    <Td>{d.totalRatings}</Td>
+                    {[5, 4, 3, 2, 1].map(n => (
+                      <Td key={n} style={{ color: colors.muted }}>{d.breakdown[n] ?? 0}</Td>
+                    ))}
+                  </tr>
+                ))}
+                {stats.length === 0 && !loading && (
+                  <tr>
+                    <Td colSpan={8} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+                      No ratings yet.
+                    </Td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {section === 'reviews' && (
+        <>
+          <Card style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <Input
+                  placeholder="Filter by Driver ID…"
+                  value={driverFilter}
+                  onChange={e => setDriverFilter(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && load(1)}
+                />
+              </div>
+              <Button onClick={() => load(1)}>Filter</Button>
+            </div>
+          </Card>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                    <Th>Date rated</Th>
+                    <Th>Driver</Th>
+                    <Th>Passenger</Th>
+                    <Th>Stars</Th>
+                    <Th>Comment</Th>
+                    <Th>Fare</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.id} style={{ borderTop: `1px solid ${colors.border}` }}>
+                      <Td>{r.ratedAt ? new Date(r.ratedAt).toLocaleString() : '—'}</Td>
+                      <Td>
+                        <div style={{ fontWeight: 600 }}>{r.driver.name}</div>
+                        <div style={{ color: colors.muted, fontSize: 11 }}>{r.driver.phone}</div>
+                      </Td>
+                      <Td>{r.passenger.name}</Td>
+                      <Td><Stars value={r.rating} /></Td>
+                      <Td style={{ maxWidth: 260, color: r.comment ? undefined : colors.muted }}>
+                        {r.comment || '—'}
+                      </Td>
+                      <Td>₱{(r.fare ?? 0).toFixed(0)}</Td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && !loading && (
+                    <tr>
+                      <Td colSpan={6} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+                        No reviews found.
+                      </Td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+          {pages > 1 && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
+              <Button variant="ghost" onClick={() => load(page - 1)} disabled={page <= 1}>← Prev</Button>
+              <span style={{ alignSelf: 'center', color: colors.muted, fontSize: 13 }}>Page {page} of {pages}</span>
+              <Button variant="ghost" onClick={() => load(page + 1)} disabled={page >= pages}>Next →</Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
