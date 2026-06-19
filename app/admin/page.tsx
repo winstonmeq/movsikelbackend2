@@ -37,7 +37,7 @@ type Stats = {
 export default function AdminDashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads' | 'wallet'>('overview');
 
   useEffect(() => {
     if (!getToken()) {
@@ -85,7 +85,8 @@ export default function AdminDashboard() {
             { label: 'Users', value: 'users' },
             { label: 'Rides', value: 'rides' },
             { label: 'Live Map', value: 'livemap' },
-            { label: 'Ads', value: 'ads' }
+            { label: 'Ads', value: 'ads' },
+            { label: 'Wallet', value: 'wallet' },
           ]}
         />
       </div>
@@ -95,6 +96,7 @@ export default function AdminDashboard() {
       {tab === 'rides' && <Rides />}
       {tab === 'livemap' && <LiveMap />}
       {tab === 'ads' && <Ads />}
+      {tab === 'wallet' && <Wallet />}
     </div>
   );
 }
@@ -864,6 +866,347 @@ function AdModal({
           </div>
         </Card>
       </div>
+    </div>
+  );
+}
+
+type DriverWalletRow = {
+  driverId: string;
+  name: string;
+  phone: string;
+  balance: number;
+  lifetimeDebits: number;
+  lifetimeRewards: number;
+  lifetimeTopUps: number;
+  lifetimeReferralBonus: number;
+};
+
+type WalletSummary = {
+  totalFeesCollected: number;
+  totalRewardsPaid: number;
+  totalTopUps: number;
+  totalReferralBonus: number;
+  netPlatformRevenue: number;
+};
+
+type WalletTx = {
+  id: string;
+  driver: { id: string; name: string; phone: string };
+  type: string;
+  direction: string;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  rideId: string | null;
+  createdAt: string;
+};
+
+function peso(v: number) {
+  return `₱${v.toFixed(2)}`;
+}
+
+function Wallet() {
+  const [drivers, setDrivers] = useState<DriverWalletRow[]>([]);
+  const [summary, setSummary] = useState<WalletSummary | null>(null);
+  const [txns, setTxns] = useState<WalletTx[]>([]);
+  const [search, setSearch] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState<DriverWalletRow | null>(null);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupNote, setTopupNote] = useState('');
+  const [topupDir, setTopupDir] = useState<'credit' | 'debit'>('credit');
+  const [txDriver, setTxDriver] = useState('');
+  const [txType, setTxType] = useState('all');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [txError, setTxError] = useState('');
+  const [activeSection, setActiveSection] = useState<'balances' | 'ledger'>('balances');
+
+  const loadDrivers = useCallback(async () => {
+    setError('');
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (search.trim()) params.set('search', search.trim());
+      const data = await adminFetch<{ drivers: DriverWalletRow[]; summary: WalletSummary }>(
+        `/api/admin/wallet?${params}`
+      );
+      setDrivers(data.drivers);
+      setSummary(data.summary);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    }
+  }, [search]);
+
+  const loadTxns = useCallback(async () => {
+    setTxError('');
+    try {
+      const params = new URLSearchParams({ limit: '40' });
+      if (txDriver.trim()) params.set('driverId', txDriver.trim());
+      if (txType !== 'all') params.set('type', txType);
+      const data = await adminFetch<{ transactions: WalletTx[] }>(
+        `/api/admin/wallet/transactions?${params}`
+      );
+      setTxns(data.transactions);
+    } catch (e) {
+      setTxError(e instanceof Error ? e.message : 'Failed');
+    }
+  }, [txDriver, txType]);
+
+  useEffect(() => { loadDrivers(); }, [loadDrivers]);
+  useEffect(() => { if (activeSection === 'ledger') loadTxns(); }, [activeSection, loadTxns]);
+
+  async function applyTopup() {
+    if (!selectedDriver) return;
+    const amount = parseFloat(topupAmount);
+    if (!amount || amount <= 0) { setError('Enter a valid amount.'); return; }
+    if (!topupNote.trim()) { setError('Enter a note.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      await adminFetch('/api/admin/wallet', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: selectedDriver.driverId, amount, note: topupNote, direction: topupDir }),
+      });
+      setSelectedDriver(null);
+      setTopupAmount('');
+      setTopupNote('');
+      loadDrivers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const balanceColor = (b: number) =>
+    b <= 0 ? colors.danger : b < 10 ? colors.warn : colors.ok;
+
+  const txColor = (dir: string) => dir === 'credit' ? colors.ok : colors.danger;
+
+  return (
+    <div>
+      {/* Summary strip */}
+      {summary && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: 'Fees collected', value: peso(summary.totalFeesCollected) },
+            { label: 'Rewards paid', value: peso(summary.totalRewardsPaid) },
+            { label: 'Referral bonus paid', value: peso(summary.totalReferralBonus) },
+            { label: 'Total top-ups', value: peso(summary.totalTopUps) },
+            { label: 'Net platform revenue', value: peso(summary.netPlatformRevenue) },
+          ].map(t => (
+            <Card key={t.label}>
+              <div style={{ color: colors.muted, fontSize: 12 }}>{t.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4,
+                color: t.label === 'Net platform revenue' ? colors.primary : undefined }}>{t.value}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Section tabs */}
+      <Card style={{ marginBottom: 16 }}>
+        <RoleTabs
+          value={activeSection}
+          onChange={v => setActiveSection(v as typeof activeSection)}
+          options={[
+            { label: 'Driver balances', value: 'balances' },
+            { label: 'Transaction ledger', value: 'ledger' },
+          ]}
+        />
+      </Card>
+
+      {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
+
+      {activeSection === 'balances' && (
+        <>
+          <Card style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <Input
+                  placeholder="Search driver by name or phone…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && loadDrivers()}
+                />
+              </div>
+              <Button onClick={loadDrivers}>Search</Button>
+            </div>
+          </Card>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                    <Th>Driver</Th>
+                    <Th>Balance</Th>
+                    <Th>Lifetime fees</Th>
+                    <Th>Rewards</Th>
+                    <Th>Referral bonus</Th>
+                    <Th>Top-ups</Th>
+                    <Th>Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.map(d => (
+                    <tr key={d.driverId} style={{ borderTop: `1px solid ${colors.border}` }}>
+                      <Td>
+                        <div style={{ fontWeight: 600 }}>{d.name}</div>
+                        <div style={{ color: colors.muted, fontSize: 12 }}>{d.phone}</div>
+                      </Td>
+                      <Td>
+                        <span style={{ fontWeight: 700, color: balanceColor(d.balance) }}>
+                          {peso(d.balance)}
+                        </span>
+                        {d.balance < 5 && (
+                          <span style={{ marginLeft: 6, fontSize: 11, color: colors.warn }}>⚠ Low</span>
+                        )}
+                      </Td>
+                      <Td>{peso(d.lifetimeDebits)}</Td>
+                      <Td>{peso(d.lifetimeRewards)}</Td>
+                      <Td>{peso(d.lifetimeReferralBonus)}</Td>
+                      <Td>{peso(d.lifetimeTopUps)}</Td>
+                      <Td>
+                        <Button variant="ghost" onClick={() => { setSelectedDriver(d); setError(''); }}>
+                          Top up / Adjust
+                        </Button>
+                      </Td>
+                    </tr>
+                  ))}
+                  {drivers.length === 0 && (
+                    <tr>
+                      <Td colSpan={7} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+                        No drivers found.
+                      </Td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {activeSection === 'ledger' && (
+        <>
+          <Card style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>Driver ID (optional)</div>
+                <Input placeholder="Paste driver ID to filter…" value={txDriver} onChange={e => setTxDriver(e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: colors.muted, marginBottom: 4 }}>Type</div>
+                <RoleTabs value={txType} onChange={setTxType} options={[
+                  { label: 'All', value: 'all' },
+                  { label: 'Fee', value: 'fee' },
+                  { label: 'Reward', value: 'reward' },
+                  { label: 'Top-up', value: 'topup' },
+                  { label: 'Referral', value: 'referral_bonus' },
+                  { label: 'Adjustment', value: 'adjustment' },
+                ]} />
+              </div>
+              <Button onClick={loadTxns}>Filter</Button>
+            </div>
+          </Card>
+          {txError && <Card style={{ color: colors.danger, marginBottom: 12 }}>{txError}</Card>}
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                    <Th>Date</Th>
+                    <Th>Driver</Th>
+                    <Th>Type</Th>
+                    <Th>Amount</Th>
+                    <Th>Balance after</Th>
+                    <Th>Description</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txns.map(t => (
+                    <tr key={t.id} style={{ borderTop: `1px solid ${colors.border}` }}>
+                      <Td>{new Date(t.createdAt).toLocaleString()}</Td>
+                      <Td>
+                        <div style={{ fontWeight: 600 }}>{t.driver.name}</div>
+                        <div style={{ color: colors.muted, fontSize: 11 }}>{t.driver.phone}</div>
+                      </Td>
+                      <Td style={{ textTransform: 'capitalize' }}>{t.type.replace('_', ' ')}</Td>
+                      <Td>
+                        <span style={{ fontWeight: 700, color: txColor(t.direction) }}>
+                          {t.direction === 'credit' ? '+' : '-'}{peso(t.amount)}
+                        </span>
+                      </Td>
+                      <Td>{peso(t.balanceAfter)}</Td>
+                      <Td style={{ maxWidth: 260 }}>{t.description}</Td>
+                    </tr>
+                  ))}
+                  {txns.length === 0 && (
+                    <tr>
+                      <Td colSpan={6} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+                        No transactions found.
+                      </Td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* Top-up / Adjust modal */}
+      {selectedDriver && (
+        <div
+          onClick={() => setSelectedDriver(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: 420, maxWidth: '100%' }}>
+            <Card>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>Top up / Adjust wallet</h2>
+              <p style={{ margin: '0 0 16px', color: colors.muted, fontSize: 13 }}>
+                {selectedDriver.name} · {selectedDriver.phone}
+              </p>
+              <div style={{ fontSize: 13, marginBottom: 16 }}>
+                Current balance:{' '}
+                <strong style={{ color: balanceColor(selectedDriver.balance) }}>
+                  {peso(selectedDriver.balance)}
+                </strong>
+              </div>
+              <Field label="Direction">
+                <RoleTabs value={topupDir} onChange={v => setTopupDir(v as 'credit' | 'debit')} options={[
+                  { label: 'Credit (add funds)', value: 'credit' },
+                  { label: 'Debit (deduct)', value: 'debit' },
+                ]} />
+              </Field>
+              <Field label="Amount (₱)">
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 50"
+                  value={topupAmount}
+                  onChange={e => setTopupAmount(e.target.value)}
+                />
+              </Field>
+              <Field label="Note (required)">
+                <Input
+                  placeholder="e.g. Manual top-up via GCash"
+                  value={topupNote}
+                  onChange={e => setTopupNote(e.target.value)}
+                />
+              </Field>
+              {error && <p style={{ color: colors.danger, fontSize: 13 }}>{error}</p>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <Button onClick={applyTopup} disabled={busy}
+                  variant={topupDir === 'debit' ? 'warn' : 'primary'}>
+                  {topupDir === 'credit' ? 'Add funds' : 'Deduct'}
+                </Button>
+                <Button variant="ghost" onClick={() => setSelectedDriver(null)} disabled={busy}>Cancel</Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

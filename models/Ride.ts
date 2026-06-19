@@ -46,6 +46,9 @@ export interface IRide {
   startedAt?: Date;
   completedAt?: Date;
   cancelledAt?: Date;
+  // Wallet: fee deducted and reward credited at completion (book rides only)
+  feeCharged?: number;
+  rewardGiven?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,7 +98,9 @@ const rideSchema = new mongoose.Schema<IRide>(
     arrivedAt: { type: Date },
     startedAt: { type: Date },
     completedAt: { type: Date },
-    cancelledAt: { type: Date }
+    cancelledAt: { type: Date },
+    feeCharged: { type: Number },
+    rewardGiven: { type: Number }
   },
   { timestamps: true }
 );

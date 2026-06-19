@@ -24,6 +24,10 @@ export interface IUser {
     coordinates: [number, number];
   };
   heading?: number;
+  // Referral fields (drivers only)
+  referralCode?: string;
+  referredBy?: mongoose.Types.ObjectId;
+  referralBonusPaid?: boolean; // true once the ₱10 bonus has been credited to referrer
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,7 +58,10 @@ const userSchema = new mongoose.Schema<IUser>(
     online: { type: Boolean, default: false, index: true },
     lastSeenAt: { type: Date, index: true },
     currentLocation: { type: pointSchema },
-    heading: { type: Number }
+    heading: { type: Number },
+    referralCode: { type: String, sparse: true, index: true, trim: true },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referralBonusPaid: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

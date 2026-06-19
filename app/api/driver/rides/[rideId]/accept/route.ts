@@ -8,6 +8,8 @@ import { emitToUser } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
+import { getOrCreateWallet } from '@/lib/wallet';
+import { WALLET_MINIMUM_ACCEPT, computeFee } from '@/lib/fareScheme';
 
 function allowOpenRideAccept() {
   return String(process.env.ALLOW_OPEN_RIDE_ACCEPT || 'false').toLowerCase() === 'true';
@@ -51,10 +53,26 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     if (driver.online !== true) return fail('Go online before accepting a ride', 409);
 
     const existingRide = await Ride.findOne({ _id: new mongoose.Types.ObjectId(rideId), status: 'requested' })
-      .select('currentOfferDriverIds candidateDriverIds passengerId pickup')
+      .select('currentOfferDriverIds candidateDriverIds passengerId pickup rideType offeredFare fareEstimate')
       .lean();
 
     if (!existingRide) return fail('Ride is no longer available', 409);
+
+    // ── Wallet gate: booking rides require a minimum balance ─────────────────
+    if ((existingRide as any).rideType === 'book') {
+      const wallet = await getOrCreateWallet(auth.sub);
+      if (wallet.balance < WALLET_MINIMUM_ACCEPT) {
+        const fare = (existingRide as any).offeredFare ?? (existingRide as any).fareEstimate ?? 0;
+        const { fee } = computeFee(fare);
+        return fail(
+          `Insufficient wallet balance (₱${wallet.balance.toFixed(2)}). ` +
+          `Top up to at least ₱${WALLET_MINIMUM_ACCEPT} to accept booking rides. ` +
+          `This ride's fee would be ₱${fee}.`,
+          402
+        );
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // With staged dispatch, a driver may only accept while the ride is currently
     // offered to them. (candidateDriverIds mirrors currentOfferDriverIds.)
