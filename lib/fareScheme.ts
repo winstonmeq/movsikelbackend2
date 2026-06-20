@@ -5,11 +5,11 @@
  *
  * Tier   | Fare range  | Platform fee | Driver reward | Net cost to driver
  * -------|-------------|--------------|---------------|-------------------
- * 0      | ₱0  – ₱19  | ₱0           | ₱0            | ₱0
- * 1      | ₱20 – ₱29  | ₱1           | ₱0.50         | ₱0.50
- * 2      | ₱30 – ₱49  | ₱2           | ₱1.00         | ₱1.00
- * 3      | ₱50 – ₱79  | ₱3           | ₱1.50         | ₱1.50
- * 4      | ₱80+        | ₱5           | ₱2.00         | ₱3.00
+ * 0      | ₱0  – ₱19  | ₱2           | ₱0.50         | ₱1.50
+ * 1      | ₱20 – ₱29  | ₱4           | ₱1.00         | ₱3.00
+ * 2      | ₱30 – ₱49  | ₱6           | ₱1.50         | ₱4.50
+ * 3      | ₱50 – ₱79  | ₱8           | ₱2.00         | ₱6.00
+ * 4      | ₱80+        | ₱10          | ₱2.50         | ₱7.50
  */
 export interface FareSchemeResult {
   fee: number;
@@ -25,11 +25,11 @@ export function computeFee(offeredFare: number): FareSchemeResult {
   let fee: number;
   let reward: number;
 
-  if (offeredFare < 20)       { fee = 0; reward = 0; }
-  else if (offeredFare < 30)  { fee = 1; reward = 0.50; }
-  else if (offeredFare < 50)  { fee = 2; reward = 1.00; }
-  else if (offeredFare < 80)  { fee = 3; reward = 1.50; }
-  else                        { fee = 5; reward = 2.00; }
+  if (offeredFare < 20)       { fee = 2;  reward = 0.50; }
+  else if (offeredFare < 30)  { fee = 4;  reward = 1.00; }
+  else if (offeredFare < 50)  { fee = 6;  reward = 1.50; }
+  else if (offeredFare < 80)  { fee = 8;  reward = 2.00; }
+  else                        { fee = 10; reward = 2.50; }
 
   return {
     fee,
@@ -40,8 +40,9 @@ export function computeFee(offeredFare: number): FareSchemeResult {
   };
 }
 
-/** Minimum wallet balance a driver must hold to accept a booking ride. */
-export const WALLET_MINIMUM_ACCEPT = 5;
+/** Minimum wallet balance a driver must hold to accept a booking ride.
+ *  Set to the max possible fee (₱10) so a driver can always cover the ride. */
+export const WALLET_MINIMUM_ACCEPT = 10;
 
 /** Free starting balance credited to every new driver on registration. */
 export const WALLET_WELCOME_BONUS = 15;
