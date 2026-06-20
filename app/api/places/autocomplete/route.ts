@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { fail, ok } from '@/lib/http';
+import { fail, ok, tooManyRequests } from '@/lib/http';
+import { rateLimitByIp } from '@/lib/rateLimit';
 
 const MIN_QUERY_LENGTH = 3;
 const MAX_RESULTS = 5;
@@ -20,6 +21,14 @@ function cleanSessionToken(value: string | null) {
 
 export async function GET(req: NextRequest) {
   try {
+    // Cost guard: cap Google Places calls at 60/min per IP. Autocomplete fires
+    // as the user types, so this is generous for real typing but blocks abuse
+    // that would run up the Google Maps bill.
+    const rl = await rateLimitByIp(req, 'places', 60, 60);
+    if (!rl.allowed) {
+      return tooManyRequests('Too many search requests. Please slow down.', rl.retryAfterSeconds);
+    }
+
     const key = process.env.GOOGLE_MAPS_API_KEY;
     if (!key) return fail('Missing GOOGLE_MAPS_API_KEY', 500);
 

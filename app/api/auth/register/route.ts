@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { connectDb } from '@/lib/db';
-import { fail, ok } from '@/lib/http';
+import { fail, ok, tooManyRequests } from '@/lib/http';
+import { rateLimitByIp } from '@/lib/rateLimit';
 import { signToken } from '@/lib/auth';
 import { normalizePhone, isValidPhone } from '@/lib/phone';
 import { User } from '@/models/User';
@@ -41,6 +42,12 @@ async function generateReferralCode(): Promise<string> {
 
 export const POST = withLogger(async function POST(req: NextRequest) {
   try {
+    // Throttle signups: 5 per 10 minutes per IP (curbs spam/bot account creation).
+    const rl = await rateLimitByIp(req, 'register', 5, 600);
+    if (!rl.allowed) {
+      return tooManyRequests('Too many sign-up attempts. Please wait a few minutes and try again.', rl.retryAfterSeconds);
+    }
+
     await connectDb();
 
     const raw = await req.json().catch(() => null);

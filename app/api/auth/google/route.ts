@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { signToken } from '@/lib/auth';
-import { fail, ok } from '@/lib/http';
+import { fail, ok, tooManyRequests } from '@/lib/http';
+import { rateLimitByIp } from '@/lib/rateLimit';
 import { User } from '@/models/User';
 import { withLogger } from '@/lib/logger';
 
@@ -51,6 +52,12 @@ async function verifyGoogleToken(idToken: string): Promise<GoogleTokenPayload> {
 
 export const POST = withLogger(async function POST(req: NextRequest) {
   try {
+    // Throttle Google sign-in: 10 per minute per IP.
+    const rl = await rateLimitByIp(req, 'google', 10, 60);
+    if (!rl.allowed) {
+      return tooManyRequests('Too many sign-in attempts. Please wait a moment and try again.', rl.retryAfterSeconds);
+    }
+
     await connectDb();
 
     const raw = await req.json().catch(() => null);

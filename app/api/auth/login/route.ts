@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { connectDb } from '@/lib/db';
 import { signToken } from '@/lib/auth';
-import { fail, ok } from '@/lib/http';
+import { fail, ok, tooManyRequests } from '@/lib/http';
+import { rateLimitByIp } from '@/lib/rateLimit';
 import { normalizePhone } from '@/lib/phone';
 import { User } from '@/models/User';
 
@@ -23,6 +24,12 @@ function formatValidationError(error: z.ZodError) {
 
 export const POST = withLogger(async function POST(req: NextRequest) {
   try {
+    // Throttle login attempts to slow brute-force: 10 per minute per IP.
+    const rl = await rateLimitByIp(req, 'login', 10, 60);
+    if (!rl.allowed) {
+      return tooManyRequests('Too many login attempts. Please wait a moment and try again.', rl.retryAfterSeconds);
+    }
+
     await connectDb();
 
     const raw = await req.json().catch(() => null);
