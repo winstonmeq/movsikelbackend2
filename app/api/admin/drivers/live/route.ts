@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDb } from '@/lib/db';
 import { ok } from '@/lib/http';
 import { withAdmin } from '@/lib/admin';
+import { onlineDriverFilter } from '@/lib/account';
 import { getAllDriverLocations } from '@/lib/redis';
 import { User } from '@/models/User';
 
@@ -17,7 +18,14 @@ export async function GET(req: NextRequest) {
 
     if (redisLocations.length > 0) {
       const driverIds = redisLocations.map((d) => d.driverId);
-      const users = await User.find({ _id: { $in: driverIds }, role: 'driver' })
+      // Cross-check against the DB: only include drivers who are genuinely online
+      // (online:true AND seen within the freshness window). A stale Redis key
+      // for a driver who has since gone offline won't slip through.
+      const users = await User.find({
+        _id: { $in: driverIds },
+        role: 'driver',
+        ...onlineDriverFilter()
+      })
         .select('name phone plateNumber tricycleNumber')
         .lean();
 
@@ -44,10 +52,13 @@ export async function GET(req: NextRequest) {
       return ok({ drivers, count: drivers.length });
     }
 
-    // Fallback to MongoDB if Redis is empty
+    // Fallback to MongoDB if Redis is empty. Must apply the SAME online +
+    // freshness filter, otherwise every driver who ever shared a location once
+    // would appear "online" forever.
     const docs = await User.find({
       role: 'driver',
-      'currentLocation.coordinates': { $exists: true, $ne: [] }
+      'currentLocation.coordinates': { $exists: true, $ne: [] },
+      ...onlineDriverFilter()
     })
       .select('name phone plateNumber tricycleNumber currentLocation heading updatedAt')
       .limit(500)

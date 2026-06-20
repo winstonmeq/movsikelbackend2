@@ -6,7 +6,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { emitToUser } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
-import { setDriverLocation } from '@/lib/redis';
+import { setDriverLocation, deleteDriverLocation } from '@/lib/redis';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 
@@ -46,8 +46,14 @@ export const POST = withLogger(async function POST(req: NextRequest) {
       { returnDocument: 'after' }
     ).select('name phone vehicleType plateNumber tricycleNumber currentLocation heading online');
 
-    // Write to Redis for fast live location reads (TTL 60s).
-    await setDriverLocation(auth.sub, body.lat, body.lng, body.heading);
+    // Only expose the driver on the live map while they are actually online.
+    // If they're offline (toggled off but app still open and pinging GPS), keep
+    // them out of Redis so the admin Live Map doesn't show offline drivers.
+    if ((driver as any)?.online === true) {
+      await setDriverLocation(auth.sub, body.lat, body.lng, body.heading);
+    } else {
+      await deleteDriverLocation(auth.sub);
+    }
 
     const activeRide = await Ride.findOne({
       driverId: auth.sub,

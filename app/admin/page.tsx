@@ -539,8 +539,8 @@ function LiveMap() {
         if (cancelled) return;
         leafletRef.current = L;
         if (!mapRef.current) {
-          // Default center: Davao region (pilot area). Map recenters on first data.
-          const map = L.map('admin-live-map').setView([7.19, 125.45], 12);
+          // Default center: Kidapawan City (pilot area). Map recenters on first data.
+          const map = L.map('admin-live-map').setView([7.022705, 125.087725], 14);
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap',
             maxZoom: 19

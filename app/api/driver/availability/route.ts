@@ -6,6 +6,7 @@ import { fail, ok } from '@/lib/http';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { withLogger } from '@/lib/logger';
+import { setDriverLocation, deleteDriverLocation } from '@/lib/redis';
 import { User } from '@/models/User';
 
 const schema = z.object({
@@ -59,6 +60,15 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     }).select('-passwordHash');
 
     if (!driver) return fail('Driver not found', 404);
+
+    // Sync the live-map cache: going offline removes the driver immediately;
+    // going online with a location seeds the cache right away.
+    if (!body.online) {
+      await deleteDriverLocation(auth.sub);
+    } else if (typeof body.lat === 'number' && typeof body.lng === 'number') {
+      await setDriverLocation(auth.sub, body.lat, body.lng, body.heading);
+    }
+
     return ok({ driver });
   } catch (err: unknown) {
     return fail(err instanceof Error ? err.message : 'Could not update availability');
