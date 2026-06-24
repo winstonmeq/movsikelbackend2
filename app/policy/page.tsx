@@ -2,16 +2,23 @@
 import styles from "./privacy-policy.module.css";
 
 export const metadata = {
-  title: "Privacy Policy — MovSikel Driver",
+  title: "Terms & Privacy Policy — MovSikel",
   description:
-    "How MovSikel Driver collects, uses, and protects driver data for tricycle ride-hailing in Kidapawan City.",
+    "The terms of service and privacy policy for the MovSikel passenger and driver apps — tricycle ride-hailing in Kidapawan City.",
 };
 
-const LAST_UPDATED = "June 20, 2026";
-const CONTACT_EMAIL = "support@mail.movsikel.com"; // change if you prefer another inbox
+const LAST_UPDATED = "June 23, 2026";
+const CONTACT_EMAIL = "support@mail.movsikel.com";
 const PRIVACY_EMAIL = "privacy@mail.movsikel.com";
 
 const sections = [
+  { id: "acceptance", label: "Acceptance of Terms" },
+  { id: "eligibility", label: "Eligibility & Accounts" },
+  { id: "service", label: "The Service" },
+  { id: "fares", label: "Fares, Booking Fees & Payments" },
+  { id: "conduct", label: "User Conduct" },
+  { id: "liability", label: "Disclaimers & Liability" },
+  { id: "termination", label: "Suspension & Termination" },
   { id: "collect", label: "Information We Collect" },
   { id: "use", label: "How We Use It" },
   { id: "location", label: "Background Location" },
@@ -33,14 +40,13 @@ export default function PrivacyPolicyPage() {
           <div className={styles.brand}>
             <span className={styles.mark} aria-hidden="true" />
             <span className={styles.brandName}>MovSikel</span>
-            <span className={styles.brandTag}>Driver</span>
           </div>
-          <p className={styles.eyebrow}>Legal · Privacy</p>
-          <h1 className={styles.title}>Privacy Policy</h1>
+          <p className={styles.eyebrow}>Legal · Terms &amp; Privacy</p>
+          <h1 className={styles.title}>Terms &amp; Privacy Policy</h1>
           <p className={styles.lede}>
-            What we collect when you drive with MovSikel, why we need it, and
-            the control you keep over it. Written for tricycle drivers in
-            Kidapawan City.
+            The terms you agree to when using MovSikel, plus what we collect, why
+            we need it, and the control you keep over it. Applies to both the
+            MovSikel passenger and driver apps in Kidapawan City.
           </p>
           <p className={styles.updated}>Last updated {LAST_UPDATED}</p>
         </div>
@@ -65,54 +71,185 @@ export default function PrivacyPolicyPage() {
 
         <main className={styles.content}>
           <p className={styles.intro}>
-            This policy explains how MovSikel (&ldquo;we&rdquo;) handles your
-            information in the MovSikel Driver app, the tricycle ride-hailing
-            driver app serving Kidapawan City, Cotabato, Philippines. Using the
-            app means you agree to what&rsquo;s described here.
+            This document covers both the <strong>Terms of Service</strong> and
+            the <strong>Privacy Policy</strong> for MovSikel (&ldquo;we&rdquo;),
+            a tricycle ride-hailing platform serving Kidapawan City, Cotabato,
+            Philippines. It applies to passengers and drivers using the MovSikel
+            apps. By creating an account or using the apps, you agree to these
+            terms and to this privacy policy.
           </p>
+
+          {/* ── Terms of Service ─────────────────────────────────────────── */}
+
+          <section id="acceptance" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>01</span> Acceptance of Terms
+            </h2>
+            <p>
+              By registering for or using MovSikel, you confirm that you have
+              read, understood, and agree to be bound by these Terms of Service
+              and the Privacy Policy below. If you do not agree, please do not
+              use the apps.
+            </p>
+          </section>
+
+          <section id="eligibility" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>02</span> Eligibility &amp;
+              Accounts
+            </h2>
+            <ul>
+              <li>
+                <strong>Passengers</strong> must be able to enter a valid
+                contact number and provide accurate pickup and destination
+                information.
+              </li>
+              <li>
+                <strong>Drivers</strong> must be at least 18 years old, hold a
+                valid driver&rsquo;s license, and operate a roadworthy,
+                properly registered tricycle.
+              </li>
+              <li>
+                You are responsible for keeping your account credentials secure
+                and for all activity under your account.
+              </li>
+              <li>
+                You agree to provide truthful information and to keep it up to
+                date.
+              </li>
+            </ul>
+          </section>
+
+          <section id="service" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>03</span> The Service
+            </h2>
+            <p>
+              MovSikel is a technology platform that connects passengers seeking
+              tricycle rides with nearby drivers. MovSikel itself does not
+              provide transportation — drivers are independent operators. We do
+              not guarantee the availability of drivers or that a request will be
+              accepted.
+            </p>
+          </section>
+
+          <section id="fares" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>04</span> Fares, Booking Fees
+              &amp; Payments
+            </h2>
+            <ul>
+              <li>
+                <strong>Pakyaw (Booking Ride)</strong> — the passenger sets a
+                fare offer, which the driver sees before accepting. The agreed
+                fare is paid by the passenger directly to the driver in cash.
+              </li>
+              <li>
+                <strong>Shared Ride</strong> — a pickup request without a fare
+                offer; fares follow local tricycle practice.
+              </li>
+              <li>
+                <strong>Booking fees</strong> — a small platform fee may be
+                charged to the driver per completed booking ride, deducted from
+                the driver&rsquo;s in-app wallet. Fees and any rewards are shown
+                in the driver app.
+              </li>
+              <li>
+                Payments between passengers and drivers are settled in cash.
+                MovSikel is not a party to those payments.
+              </li>
+            </ul>
+          </section>
+
+          <section id="conduct" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>05</span> User Conduct
+            </h2>
+            <p>You agree not to:</p>
+            <ul>
+              <li>Use the apps for any unlawful, harmful, or fraudulent purpose.</li>
+              <li>Harass, threaten, or endanger other users.</li>
+              <li>Provide false information or impersonate another person.</li>
+              <li>Interfere with, disrupt, or attempt to misuse the platform.</li>
+              <li>
+                Game the matching, rating, referral, or fee systems (e.g. fake
+                rides or false ratings).
+              </li>
+            </ul>
+          </section>
+
+          <section id="liability" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>06</span> Disclaimers &amp;
+              Liability
+            </h2>
+            <p>
+              The apps are provided &ldquo;as is&rdquo; without warranties of any
+              kind. To the extent permitted by law, MovSikel is not liable for
+              the conduct of drivers or passengers, for the condition of any
+              vehicle, or for incidents that occur during a trip. Rides are taken
+              at your own risk, and drivers are responsible for safe operation
+              and compliance with traffic laws.
+            </p>
+          </section>
+
+          <section id="termination" className={styles.section}>
+            <h2>
+              <span className={styles.sectionNum}>07</span> Suspension &amp;
+              Termination
+            </h2>
+            <p>
+              We may suspend or terminate an account that violates these terms,
+              abuses the service, or poses a risk to other users. You may stop
+              using the apps and request account deletion at any time (see
+              section 15).
+            </p>
+          </section>
+
+          {/* ── Privacy Policy ──────────────────────────────────────────── */}
 
           <section id="collect" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>01</span> Information We
+              <span className={styles.sectionNum}>08</span> Information We
               Collect
             </h2>
-            <p>To match you with passengers and run the app, we collect:</p>
+            <p>To run the service, we collect:</p>
             <ul>
               <li>
-                <strong>Account details</strong> — name, mobile number, email,
-                TODA membership, tricycle plate or body number, and the driver
-                credentials you enter at sign-up.
+                <strong>Account details</strong> — name, mobile number, and
+                email. For drivers, also tricycle plate or body number and the
+                credentials entered at sign-up.
               </li>
               <li>
-                <strong>Location</strong> — precise GPS position, in the
-                foreground and background while you are online, to match you
-                with nearby passengers and guide you to pickup and drop-off.
+                <strong>Location</strong> — passengers&rsquo; pickup and
+                destination points; drivers&rsquo; precise GPS position
+                (foreground and background while online) to match rides and guide
+                navigation.
               </li>
               <li>
-                <strong>Trip data</strong> — ride requests, accepted and
-                declined trips, pickup and destination points, fares, booking
-                fees, and history.
+                <strong>Trip data</strong> — ride requests, accepted and declined
+                trips, fares, booking fees, ratings, and history.
               </li>
               <li>
-                <strong>Subscription &amp; fees</strong> — your monthly
-                subscription status and booking fees tied to your trips.
+                <strong>Wallet &amp; fees</strong> — for drivers, wallet balance,
+                top-ups, booking fees, and referral activity.
               </li>
               <li>
-                <strong>Device data</strong> — device model, OS, app version,
-                and crash or diagnostic information.
+                <strong>Device data</strong> — device model, OS, app version, and
+                crash or diagnostic information.
               </li>
             </ul>
           </section>
 
           <section id="use" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>02</span> How We Use It
+              <span className={styles.sectionNum}>09</span> How We Use It
             </h2>
             <ul>
-              <li>Match you with nearby passengers and confirm requests.</li>
-              <li>Provide real-time navigation to pickup and drop-off.</li>
-              <li>Calculate fares and booking fees and keep your history.</li>
-              <li>Manage your subscription and verify your account.</li>
+              <li>Match passengers with nearby drivers and confirm requests.</li>
+              <li>Provide real-time tracking and navigation to pickup and drop-off.</li>
+              <li>Calculate fares and booking fees and keep trip history.</li>
+              <li>Manage driver wallets, referrals, and account verification.</li>
               <li>Improve performance, reliability, and safety.</li>
               <li>Send service updates, support, and important notices.</li>
               <li>Meet obligations under Philippine law.</li>
@@ -121,37 +258,39 @@ export default function PrivacyPolicyPage() {
 
           <section id="location" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>03</span> Background Location
+              <span className={styles.sectionNum}>10</span> Background Location
             </h2>
             <p>
-              MovSikel Driver uses location in the background only while your
-              status is <strong>online</strong> and you are available for rides.
-              This lets the app send nearby requests and show passengers your
-              live position. Setting your status to{" "}
-              <strong>offline</strong> stops background location collection. You
-              can change location permissions any time in your device settings.
+              The driver app uses location in the background only while a
+              driver&rsquo;s status is <strong>online</strong> and available for
+              rides — this lets the app send nearby requests and show passengers
+              the driver&rsquo;s live position. Setting status to{" "}
+              <strong>offline</strong> stops background location collection. The
+              passenger app uses location only while you are booking or tracking a
+              ride. You can change location permissions any time in your device
+              settings.
             </p>
           </section>
 
           <section id="sharing" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>04</span> Sharing of
+              <span className={styles.sectionNum}>11</span> Sharing of
               Information
             </h2>
             <p>We do not sell your personal information. We share only:</p>
             <ul>
               <li>
-                <strong>With passengers</strong> — limited details such as your
-                name, tricycle identifier, and live location needed to complete
-                a trip.
+                <strong>Between passenger and driver</strong> — limited details
+                needed to complete a trip, such as name, contact number,
+                tricycle identifier, and live location.
               </li>
               <li>
                 <strong>With service providers</strong> — trusted partners for
                 hosting, maps, and notifications, bound by confidentiality.
               </li>
               <li>
-                <strong>With partner TODAs and local authorities</strong> —
-                where needed for accreditation, disputes, or compliance.
+                <strong>With partner TODAs and local authorities</strong> — where
+                needed for accreditation, disputes, or compliance.
               </li>
               <li>
                 <strong>When required by law</strong> — to meet legal process or
@@ -162,7 +301,7 @@ export default function PrivacyPolicyPage() {
 
           <section id="retention" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>05</span> Data Retention
+              <span className={styles.sectionNum}>12</span> Data Retention
             </h2>
             <p>
               We keep your information while your account is active and as needed
@@ -173,7 +312,7 @@ export default function PrivacyPolicyPage() {
 
           <section id="security" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>06</span> Data Security
+              <span className={styles.sectionNum}>13</span> Data Security
             </h2>
             <p>
               We use reasonable technical and organizational measures to protect
@@ -184,7 +323,7 @@ export default function PrivacyPolicyPage() {
 
           <section id="rights" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>07</span> Your Rights
+              <span className={styles.sectionNum}>14</span> Your Rights
             </h2>
             <p>
               Under the Philippine Data Privacy Act of 2012 (Republic Act No.
@@ -195,42 +334,43 @@ export default function PrivacyPolicyPage() {
 
           <section id="deletion" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>08</span> Account &amp; Data
+              <span className={styles.sectionNum}>15</span> Account &amp; Data
               Deletion
             </h2>
             <p>
               Request deletion of your account and data by emailing{" "}
               <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a>. We process
-              verified requests within a reasonable period, except records we
-              are legally required to keep.
+              verified requests within a reasonable period, except records we are
+              legally required to keep.
             </p>
           </section>
 
           <section id="children" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>09</span> Children&rsquo;s
+              <span className={styles.sectionNum}>16</span> Children&rsquo;s
               Privacy
             </h2>
             <p>
-              The app is for licensed tricycle drivers aged 18 and above. We do
-              not knowingly collect data from minors.
+              MovSikel is intended for adults. The driver app is for licensed
+              tricycle drivers aged 18 and above. We do not knowingly collect
+              data from minors.
             </p>
           </section>
 
           <section id="changes" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>10</span> Changes
+              <span className={styles.sectionNum}>17</span> Changes
             </h2>
             <p>
-              We may update this policy. Material changes are reflected in the
-              &ldquo;Last updated&rdquo; date above, and continued use means you
-              accept them.
+              We may update these terms or this policy. Material changes are
+              reflected in the &ldquo;Last updated&rdquo; date above, and
+              continued use means you accept them.
             </p>
           </section>
 
           <section id="contact" className={styles.section}>
             <h2>
-              <span className={styles.sectionNum}>11</span> Contact
+              <span className={styles.sectionNum}>18</span> Contact
             </h2>
             <div className={styles.contactCard}>
               <p className={styles.contactCompany}>MovSikel</p>
