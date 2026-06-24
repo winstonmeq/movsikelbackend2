@@ -7,7 +7,7 @@ export const metadata = {
     "The terms of service and privacy policy for the MovSikel passenger and driver apps — tricycle ride-hailing in Kidapawan City.",
 };
 
-const LAST_UPDATED = "June 23, 2026";
+const LAST_UPDATED = "June 10, 2026";
 const CONTACT_EMAIL = "support@mail.movsikel.com";
 const PRIVACY_EMAIL = "privacy@mail.movsikel.com";
 
