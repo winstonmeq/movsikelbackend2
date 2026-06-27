@@ -135,10 +135,24 @@ async function applyStage(rideId: string, index: number) {
   if (!ride || ride.status !== 'requested') return ride;
 
   const queue = (ride.dispatchQueue || []) as mongoose.Types.ObjectId[];
-  const slice = offerSliceForIndex(queue, index);
+  const declined = new Set(
+    ((ride.declinedDriverIds || []) as mongoose.Types.ObjectId[]).map(String)
+  );
+
+  // Walk forward to the next stage that actually has a non-declined driver to
+  // offer. A stage whose only driver already declined must be SKIPPED (advance
+  // the index), not treated as queue-exhausted — otherwise one decline at a
+  // single-driver stage would prematurely end the ride while later drivers
+  // remain. We stop when we find a real slice or run off the end of the queue.
+  let stageIndex = index;
+  let slice = offerSliceForIndex(queue, stageIndex).filter((id) => !declined.has(String(id)));
+  while (slice.length === 0 && !isQueueExhausted(queue, stageIndex)) {
+    stageIndex += 1;
+    slice = offerSliceForIndex(queue, stageIndex).filter((id) => !declined.has(String(id)));
+  }
 
   if (slice.length === 0) {
-    // No more drivers to try.
+    // Genuinely no more drivers to try.
     const updated = await Ride.findByIdAndUpdate(
       rideId,
       {
@@ -157,7 +171,7 @@ async function applyStage(rideId: string, index: number) {
   const updated = await Ride.findByIdAndUpdate(
     rideId,
     {
-      dispatchIndex: index,
+      dispatchIndex: stageIndex,
       currentOfferDriverIds: slice,
       candidateDriverIds: slice,
       offerExpiresAt: expires
@@ -208,10 +222,13 @@ async function refreshQueueTail(rideId: string) {
   );
   if (fresh.length === 0) return;
 
-  // Append only — never reorder what's already been offered.
+  // Append only — never reorder what's already been offered. $addToSet (not
+  // $push) so a same-tick race between the worker and a driver poll can't insert
+  // the same driver twice, which would otherwise offer them the ride on two
+  // different stages.
   await Ride.updateOne(
     { _id: rideId, status: 'requested' },
-    { $push: { dispatchQueue: { $each: fresh } } }
+    { $addToSet: { dispatchQueue: { $each: fresh } } }
   );
 }
 

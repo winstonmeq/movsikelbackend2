@@ -52,7 +52,14 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     // "online but never offered a ride" failure. We check the existing record so
     // a driver who already has a recent location can re-toggle online without a
     // fresh fix in hand.
-    if (body.online && !hasLocation) {
+    //
+    // Gated by REQUIRE_LOCATION_FOR_ONLINE (default ON) so this can be disabled
+    // instantly via env — without a redeploy — if it ever locks out drivers
+    // whose app toggles online before its first GPS fix.
+    const requireLocationForOnline =
+      String(process.env.REQUIRE_LOCATION_FOR_ONLINE ?? 'true').toLowerCase() !== 'false';
+
+    if (requireLocationForOnline && body.online && !hasLocation) {
       const existing = await User.findById(auth.sub).select('currentLocation').lean();
       const existingCoords = (existing as any)?.currentLocation?.coordinates;
       if (!Array.isArray(existingCoords) || existingCoords.length < 2) {
