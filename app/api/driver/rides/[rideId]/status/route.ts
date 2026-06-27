@@ -48,10 +48,10 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     if (nextStatus === 'completed') updates.completedAt = new Date();
     if (nextStatus === 'cancelled') updates.cancelledAt = new Date();
 
-    // ── Wallet: deduct fee + credit reward on booking ride completion ──────────
+    // ── Wallet: deduct the flat booking fee on completion (no reward) ──────────
     if (nextStatus === 'completed' && (existingRide as any).rideType === 'book') {
       const fare = (existingRide as any).offeredFare ?? (existingRide as any).fareEstimate ?? 0;
-      const { fee, reward, feeDescription, rewardDescription } = computeFee(fare);
+      const { fee, feeDescription } = computeFee(fare);
 
       if (fee > 0) {
         await debitWallet({
@@ -62,29 +62,14 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
           rideId,
         });
         updates.feeCharged = fee;
-      }
-      if (reward > 0) {
-        await creditWallet({
-          driverId: auth.sub,
-          amount: reward,
-          type: 'reward',
-          description: rewardDescription,
-          rideId,
-        });
-        updates.rewardGiven = reward;
-      }
 
-      // Notify driver of the wallet movement
-      if (fee > 0 || reward > 0) {
         emitToUser(auth.sub, 'wallet:update', {
           fee,
-          reward,
-          net: reward - fee,
           fare,
-        }, fee > 0 ? {
+        }, {
           title: 'Booking fee deducted',
-          body: `₱${fee} fee deducted · ₱${reward} reward credited. Net: ₱${(reward - fee).toFixed(2)}.`,
-        } : undefined);
+          body: `₱${fee.toFixed(2)} platform fee deducted for your ₱${fare} ride.`,
+        });
       }
 
       // ── Referral bonus: credit referrer on referee's first completed booking ──

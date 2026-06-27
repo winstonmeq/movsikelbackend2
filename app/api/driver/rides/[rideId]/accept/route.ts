@@ -66,8 +66,8 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
         const { fee } = computeFee(fare);
         return fail(
           `Insufficient wallet balance (₱${wallet.balance.toFixed(2)}). ` +
-          `Top up to at least ₱${WALLET_MINIMUM_ACCEPT} to accept booking rides. ` +
-          `This ride's fee would be ₱${fee}.`,
+          `Top up to at least ₱${WALLET_MINIMUM_ACCEPT.toFixed(2)} to accept booking rides. ` +
+          `This ride's fee would be ₱${fee.toFixed(2)}.`,
           402
         );
       }

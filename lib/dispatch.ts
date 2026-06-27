@@ -27,11 +27,11 @@ export function offerWindowMs() {
 }
 
 export function firstBatchSize() {
-  return Number(process.env.DISPATCH_FIRST_BATCH || 3); // first 3 together
+  return Number(process.env.DISPATCH_FIRST_BATCH || 5); // first 3 together
 }
 
 export function dispatchSearchRadiusMeters() {
-  return Number(process.env.DRIVER_SEARCH_RADIUS_METERS || 15000);
+  return Number(process.env.DRIVER_SEARCH_RADIUS_METERS || 5000);
 }
 
 type LatLng = { lat: number; lng: number };

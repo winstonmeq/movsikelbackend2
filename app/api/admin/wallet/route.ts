@@ -9,6 +9,8 @@ import { User } from '@/models/User';
 import { DriverWallet } from '@/models/DriverWallet';
 import { WalletTransaction } from '@/models/WalletTransaction';
 import { creditWallet, debitWallet } from '@/lib/wallet';
+import { emitToUser } from '@/lib/realtime';
+import { WALLET_MINIMUM_ACCEPT } from '@/lib/fareScheme';
 
 const topupSchema = z.object({
   driverId: z.string().min(1),
@@ -112,6 +114,18 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     const wallet = direction === 'credit'
       ? await creditWallet({ driverId, amount, type: 'topup', description: `Admin top-up: ${note}` })
       : await debitWallet({ driverId, amount, type: 'adjustment', description: `Admin adjustment: ${note}` });
+
+    // Tell the driver app the balance changed so it refreshes the badge/banner
+    // immediately, instead of leaving a stale "top up" warning until the app
+    // restarts or a ride completes.
+    emitToUser(
+      driverId,
+      'wallet:update',
+      { balance: wallet.balance, canAcceptBooking: wallet.balance >= WALLET_MINIMUM_ACCEPT },
+      direction === 'credit'
+        ? { title: 'Wallet topped up', body: `₱${amount} added. New balance: ₱${wallet.balance.toFixed(2)}.` }
+        : { title: 'Wallet adjusted', body: `₱${amount} deducted. New balance: ₱${wallet.balance.toFixed(2)}.` },
+    );
 
     return ok({ wallet: { balance: wallet.balance }, driverId, amount, direction, note });
   });
