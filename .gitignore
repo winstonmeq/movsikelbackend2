@@ -6,6 +6,11 @@ dist
 build
 .vercel
 
+# Next.js generated build artifacts (rewritten on every build — never commit;
+# tracking them causes pull conflicts on deploy targets like the VPS)
+next-env.d.ts
+tsconfig.tsbuildinfo
+
 # Flutter
 .dart_tool
 .flutter-plugins
