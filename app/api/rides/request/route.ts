@@ -7,7 +7,7 @@ import { fail, ok } from '@/lib/http';
 import { isValidLatLng } from '@/lib/geo';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers } from '@/lib/realtime';
-import { startDispatch } from '@/lib/dispatch';
+import { startDispatch, buildDispatchQueue, dispatchSearchRadiusMeters } from '@/lib/dispatch';
 import '@/lib/dispatchWorker'; // self-starts the background progression timer (VPS)
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
@@ -86,21 +86,32 @@ export const POST = withLogger(async function POST(req: NextRequest) {
       return fail('Invalid pickup or destination coordinates');
     }
 
-    const radiusMeters = body.searchRadiusMeters || Number(process.env.DRIVER_SEARCH_RADIUS_METERS || 15000);
+    const radiusMeters = body.searchRadiusMeters || dispatchSearchRadiusMeters();
 
+    // The dispatch QUEUE (who actually gets offered the ride) is built from the
+    // SAME Redis-first source as every later dispatch stage, so the initial offer
+    // wave can't drift from the live presence set. This is the fast path: an
+    // in-memory Redis read + a single Mongo eligibility check, no $near.
+    let candidateDriverIds = await buildDispatchQueue(body.pickup, radiusMeters);
+
+    // The `nearbyDrivers` payload below is COSMETIC only (the passenger's "X
+    // drivers nearby" hint + initial markers). It can stay on Mongo $near; it
+    // does not drive who is offered the ride.
     const driversForRequest = [...(await findNearbyRealDrivers(body.pickup, radiusMeters))];
     let searchExpanded = false;
 
+    // Escape hatch: if nobody is within radius, optionally widen to ALL online
+    // drivers. Applies to BOTH the offer queue and the cosmetic payload so the
+    // ride can still be matched outside the normal radius.
     if (
-      driversForRequest.length === 0 &&
+      candidateDriverIds.length === 0 &&
       String(process.env.DISPATCH_ALL_ONLINE_DRIVERS_IF_NONE_NEARBY || 'false').toLowerCase() === 'true'
     ) {
       const onlineDrivers = await findAnyOnlineRealDrivers();
       driversForRequest.push(...onlineDrivers);
+      candidateDriverIds = onlineDrivers.map((d) => d._id as mongoose.Types.ObjectId);
       searchExpanded = onlineDrivers.length > 0;
     }
-
-    const candidateDriverIds = driversForRequest.map((driver) => driver._id);
 
     const fareEstimate = estimateFare(body.distanceMeters);
     if (body.rideType === 'book' && (!body.offeredFare || body.offeredFare <= 0)) {
