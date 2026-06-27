@@ -8,6 +8,7 @@ import { isValidLatLng } from '@/lib/geo';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers } from '@/lib/realtime';
 import { startDispatch } from '@/lib/dispatch';
+import '@/lib/dispatchWorker'; // self-starts the background progression timer (VPS)
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 

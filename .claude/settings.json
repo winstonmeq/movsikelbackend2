@@ -4,7 +4,8 @@
       "Bash(npx tsc *)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\winst\\StudioProjects\\driver_app\\lib\\screens"
+      "C:\\Users\\winst\\StudioProjects\\driver_app\\lib\\screens",
+      "C:\\Users\\winst\\StudioProjects\\driver_app\\lib"
     ]
   }
 }

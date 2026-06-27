@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1e293b;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    margin: 0;
+  }
+  h1, h2, h3 { color: #0f766e; margin: 0 0 8px; }
+  h1 { font-size: 26pt; }
+  h2 {
+    font-size: 15pt;
+    border-bottom: 2px solid #0f766e;
+    padding-bottom: 5px;
+    margin-top: 26px;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 12pt; color: #115e59; margin-top: 16px; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .cover {
+    text-align: center;
+    padding-top: 120px;
+    page-break-after: always;
+  }
+  .cover .logo { font-size: 40pt; font-weight: 800; color: #0f766e; letter-spacing: -1px; }
+  .cover .sub { font-size: 14pt; color: #475569; margin-top: 6px; }
+  .cover .title { font-size: 20pt; font-weight: 700; margin-top: 90px; color: #1e293b; }
+  .cover .meta { margin-top: 14px; color: #64748b; font-size: 11pt; }
+  .badge {
+    display: inline-block; background: #0f766e; color: #fff;
+    padding: 3px 10px; border-radius: 999px; font-size: 8.5pt; font-weight: 600;
+    margin-top: 30px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 9.5pt; }
+  th { background: #0f766e; color: #fff; text-align: left; padding: 7px 9px; font-weight: 600; }
+  td { padding: 6px 9px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .box {
+    background: #f0fdfa; border-left: 4px solid #0f766e;
+    padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0;
+  }
+  .box.amber { background: #fffbeb; border-left-color: #d97706; }
+  .pill {
+    display: inline-block; background: #e2e8f0; color: #334155;
+    padding: 1px 8px; border-radius: 4px; font-size: 8.5pt; font-family: 'Courier New', monospace;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .flow { counter-reset: step; }
+  .flow .s { padding: 4px 0 4px 30px; position: relative; }
+  .flow .s:before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 4px;
+    background: #0f766e; color: #fff; width: 20px; height: 20px;
+    border-radius: 50%; text-align: center; font-size: 9pt; font-weight: 700; line-height: 20px;
+  }
+  .muted { color: #64748b; font-size: 9pt; }
+  .page-break { page-break-before: always; }
+  footer { position: fixed; bottom: -12mm; left: 0; right: 0; text-align: center; color: #94a3b8; font-size: 8pt; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="logo">MovSikel</div>
+  <div class="sub">Tricycle Ride-Hailing Platform · Kidapawan City Pilot</div>
+  <div class="title">System Architecture &amp; Feature Report</div>
+  <div class="meta">Backend &amp; Driver Application · Technical Overview for Investors</div>
+  <div class="badge">PRODUCTION-DEPLOYED · LIVE PILOT</div>
+  <div class="meta" style="margin-top:60px; font-size:9.5pt;">Prepared: June 2026</div>
+</div>
+
+<!-- EXEC SUMMARY -->
+<h2>1. Executive Summary</h2>
+<p>MovSikel is a fully working ride-hailing platform purpose-built for the tricycle transport market in Kidapawan City. The system is <strong>live in production</strong> on a dedicated cloud server (VPS) with a real-time matching engine, a driver wallet/commission system, push-notification dispatch, and live GPS tracking.</p>
+<p>The platform is designed around how tricycles <em>actually operate locally</em>: passengers pay the driver in <strong>cash</strong>, the app is a digital matchmaker — not a payment processor — which keeps the model simple, compliant, and free of financial-handling risk while still generating platform revenue through a transparent booking-fee scheme.</p>
+<div class="box">
+  <strong>Two ride products:</strong><br>
+  <strong>Shared Ride</strong> — a standard "pasada" pickup, free for the driver, no fare negotiation.<br>
+  <strong>Booking Ride (Pakyaw)</strong> — a complete door-to-door route where the passenger <em>offers a fare</em> and the driver accepts or declines. This premium product carries the platform's booking fee.
+</div>
+
+<h2>2. Technology Stack</h2>
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Backend</td><td>Next.js 16 (TypeScript)</td><td>REST API server &amp; admin web dashboard</td></tr>
+  <tr><td>Database</td><td>MongoDB (Atlas)</td><td>Persistent data: users, rides, wallets, ratings</td></tr>
+  <tr><td>Real-time cache</td><td>Redis (self-hosted)</td><td>Live driver locations (60-second TTL)</td></tr>
+  <tr><td>Geospatial</td><td>MongoDB 2dsphere index</td><td>Fast "nearest driver" queries</td></tr>
+  <tr><td>Push notifications</td><td>Firebase Cloud Messaging</td><td>Instant ride alerts to driver &amp; passenger</td></tr>
+  <tr><td>Maps</td><td>Google Maps Platform</td><td>Places search, directions, geocoding</td></tr>
+  <tr><td>Driver app</td><td>Flutter (Android)</td><td>Native cross-platform mobile app</td></tr>
+  <tr><td>Hosting</td><td>Linux VPS + PM2 + Nginx</td><td>Always-on production deployment</td></tr>
+  <tr><td>Authentication</td><td>JWT (HS256) + bcrypt</td><td>Secure tokenized sessions</td></tr>
+</table>
+
+<!-- MATCHMAKING -->
+<h2 class="page-break">3. Passenger–Driver Matchmaking</h2>
+<p>The core of the platform is a <strong>staged sequential dispatch engine</strong> that connects a passenger to the right driver quickly and fairly. The full flow:</p>
+<div class="flow">
+  <div class="s"><strong>Passenger requests a ride.</strong> They pick a pickup &amp; destination (via Google Places), choose Shared or Booking, and — for Booking — offer a fare. The request is sent to the backend.</div>
+  <div class="s"><strong>The system finds nearby drivers.</strong> A geospatial query locates online drivers near the pickup point, ordered nearest-first, and builds a dispatch queue.</div>
+  <div class="s"><strong>First batch is offered.</strong> The ride is offered <em>simultaneously</em> to the first 3 nearest drivers via push notification — maximizing the chance of a fast accept.</div>
+  <div class="s"><strong>First to accept wins.</strong> The first driver to tap "Accept" is assigned the ride atomically; the offer is withdrawn from the others instantly.</div>
+  <div class="s"><strong>Auto-advance if no one accepts.</strong> If the batch doesn't respond within the offer window, the system advances to the next nearest driver, one at a time, until someone accepts.</div>
+  <div class="s"><strong>Graceful exhaustion.</strong> If every nearby driver has been asked and none accept, the passenger is cleanly told "No drivers available" rather than waiting indefinitely.</div>
+</div>
+
+<h3>3.1 Finding Drivers — Geospatial Search</h3>
+<p>Driver discovery uses MongoDB's <span class="pill">2dsphere</span> geospatial index with a <span class="pill">$near</span> query. This is an indexed R-tree lookup — it does <strong>not</strong> scan every driver. It returns only drivers within the search radius, already sorted by true distance, in milliseconds. This keeps the system fast and inexpensive even as the driver pool grows.</p>
+<table>
+  <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+  <tr><td>Search radius</td><td>15 km (configurable)</td><td>Max distance to consider a driver</td></tr>
+  <tr><td>First batch size</td><td>3 drivers</td><td>Offered together for speed</td></tr>
+  <tr><td>Offer window</td><td>10 s per stage (configurable)</td><td>Time each driver/batch gets to accept</td></tr>
+  <tr><td>Online freshness</td><td>2 minutes</td><td>A driver must have pinged within this window to count as online</td></tr>
+</table>
+
+<h3>3.2 Why This Design Is Strong</h3>
+<ul>
+  <li><strong>Fast:</strong> Offering 3 drivers at once dramatically reduces match time vs. asking one-by-one.</li>
+  <li><strong>Fair:</strong> Only the truly nearest, currently-online drivers are offered each ride.</li>
+  <li><strong>Race-proof:</strong> "First-to-accept-wins" is enforced atomically at the database level — two drivers can never be assigned the same ride.</li>
+  <li><strong>Serverless-resilient:</strong> Dispatch progresses lazily on each poll/event, so it works reliably without fragile background timers.</li>
+  <li><strong>Scalable foundation:</strong> The architecture is ready to layer in fairness-based driver scoring (idle time, ratings, acceptance rate) when the network grows.</li>
+</ul>
+
+<!-- FARE / WALLET -->
+<h2 class="page-break">4. Fare Scheme &amp; Driver Wallet (Revenue Model)</h2>
+<p>Passengers pay <strong>cash directly to the driver</strong> — the platform never touches passenger money. Platform revenue comes from a small, transparent <strong>booking fee</strong> charged to the driver's prepaid wallet, only on completed <strong>Booking</strong> rides. Shared rides are always free.</p>
+
+<h3>4.1 Booking Fee Scheme</h3>
+<table>
+  <tr><th>Fare offered by passenger</th><th>Platform fee</th><th>Driver reward</th><th>Net cost to driver</th></tr>
+  <tr><td>₱0 – ₱19</td><td>₱2</td><td>₱0.50</td><td>₱1.50</td></tr>
+  <tr><td>₱20 – ₱29</td><td>₱4</td><td>₱1.00</td><td>₱3.00</td></tr>
+  <tr><td>₱30 – ₱49</td><td>₱6</td><td>₱1.50</td><td>₱4.50</td></tr>
+  <tr><td>₱50 – ₱79</td><td>₱8</td><td>₱2.00</td><td>₱6.00</td></tr>
+  <tr><td>₱80 and above</td><td>₱10</td><td>₱2.50</td><td>₱7.50</td></tr>
+</table>
+<p class="muted">The "reward" is credited back to the driver's wallet on completion, softening the net cost and rewarding activity. Example: on a ₱60 booking, the driver collects ₱60 cash from the passenger, pays ₱8 platform fee from their wallet, and receives ₱2 back — a net platform revenue of ₱6 per ride.</p>
+
+<h3>4.2 Prepaid Wallet System</h3>
+<ul>
+  <li><strong>Top-up based:</strong> Drivers maintain a prepaid balance; fees are auto-deducted on ride completion. Collection is guaranteed — there is no debt risk.</li>
+  <li><strong>Welcome bonus:</strong> New drivers receive ₱15 free starting balance to onboard smoothly.</li>
+  <li><strong>Minimum to accept:</strong> A driver needs at least ₱10 balance to accept a Booking ride (enough to always cover the fee).</li>
+  <li><strong>Immutable ledger:</strong> Every fee, reward, top-up, referral bonus, and adjustment is recorded as a permanent transaction record for full auditability.</li>
+  <li><strong>Admin top-up:</strong> Administrators can credit driver wallets (e.g. after GCash payment) directly from the admin dashboard.</li>
+</ul>
+
+<h3>4.3 Driver Referral Program</h3>
+<p>Each driver gets a unique referral code. When a referred driver completes their <em>first</em> booking ride, the referrer earns a ₱10 wallet bonus. The "first completed ride" trigger ensures bonuses only reward genuinely active drivers — it is resistant to fake-signup farming.</p>
+
+<!-- REAL-TIME -->
+<h2 class="page-break">5. Real-Time Location &amp; Live Tracking</h2>
+
+<h3>5.1 Redis Live-Location Layer</h3>
+<p>High-frequency driver GPS updates are stored in <strong>Redis</strong> (in-memory) rather than the main database. This is the same "hot location layer" pattern used by major ride-hailing platforms.</p>
+<ul>
+  <li><strong>Speed:</strong> Location reads/writes hit memory, not disk — sub-millisecond, and they never burden the primary database.</li>
+  <li><strong>Self-cleaning:</strong> Each location has a <strong>60-second TTL</strong> (time-to-live). A driver who loses signal or goes offline automatically disappears from the live map — no cleanup job needed.</li>
+  <li><strong>Powers:</strong> the admin live map, passenger live-tracking of their assigned driver, and dispatch freshness checks.</li>
+</ul>
+
+<h3>5.2 Smooth Location Querying &amp; Bandwidth Efficiency</h3>
+<ul>
+  <li><strong>Movement-gated updates:</strong> The driver app only sends location when the driver actually moves (distance filter), so a parked driver doesn't flood the server with redundant pings.</li>
+  <li><strong>Adaptive rate-limiting:</strong> Network pushes are throttled (more frequent during an active ride when a passenger is watching, less frequent when idle) — balancing freshness against battery and data usage.</li>
+  <li><strong>Heartbeat:</strong> A lightweight 30-second "still here" ping keeps a stationary driver marked online without continuous GPS streaming.</li>
+</ul>
+
+<h3>5.3 In-App Navigation</h3>
+<ul>
+  <li><strong>Heading-aware markers:</strong> The driver and the tracked vehicle are shown as directional arrows that rotate to the real travel heading — a true turn-by-turn navigation feel.</li>
+  <li><strong>Smooth follow camera:</strong> The map glides with the driver continuously (no jarring snapping), and can be freely panned, automatically resuming follow.</li>
+  <li><strong>Auto-framing:</strong> When a request arrives, the map auto-zooms to show driver, pickup, and destination together so the driver can judge the trip at a glance.</li>
+  <li><strong>Google Maps handoff:</strong> One tap launches full external Google Maps turn-by-turn navigation to the pickup or drop-off.</li>
+</ul>
+
+<h3>5.4 Background Operation (Always-Online)</h3>
+<p>The driver app runs a proper <strong>Android foreground service</strong>, so a driver stays online and keeps reporting location <em>even when the app is minimized or the screen is locked</em> — exactly like Grab/Uber driver apps. The service starts when the driver goes online and stops when they go offline, preserving battery.</p>
+
+<!-- FEATURE LIST -->
+<h2 class="page-break">6. Complete Feature List</h2>
+
+<h3>6.1 Backend Features</h3>
+<div class="grid2">
+  <ul>
+    <li>Phone + password authentication (JWT)</li>
+    <li>Google Sign-In (passenger)</li>
+    <li>Staged sequential ride dispatch engine</li>
+    <li>Geospatial nearest-driver search</li>
+    <li>First-to-accept-wins atomic assignment</li>
+    <li>Ride lifecycle (request → accept → arrive → in-progress → complete)</li>
+    <li>Passenger ride cancellation with driver notification</li>
+    <li>Driver wallet &amp; booking-fee engine</li>
+    <li>Immutable wallet transaction ledger</li>
+    <li>Driver referral program</li>
+  </ul>
+  <ul>
+    <li>Driver rating &amp; review system</li>
+    <li>Redis live-location caching (60s TTL)</li>
+    <li>Firebase push-notification delivery</li>
+    <li>Google Places search / directions / geocoding</li>
+    <li>Kidapawan service-area biasing</li>
+    <li>Rate limiting (login, signup, places) via Redis</li>
+    <li>Account suspend / ban enforcement</li>
+    <li>"Check this out" promo/ads CRUD</li>
+    <li>Full admin web dashboard</li>
+    <li>Health-check &amp; structured request logging</li>
+  </ul>
+</div>
+
+<h3>6.2 Admin Dashboard</h3>
+<ul>
+  <li><strong>Overview:</strong> live platform statistics (drivers, passengers, rides, revenue).</li>
+  <li><strong>Users:</strong> search, filter, edit, suspend/ban, reset passwords.</li>
+  <li><strong>Rides:</strong> full ride history with status, fares, passenger &amp; driver.</li>
+  <li><strong>Live Map:</strong> real-time map of all online drivers (centered on Kidapawan).</li>
+  <li><strong>Wallet:</strong> driver balances, top-ups/adjustments, transaction ledger, platform revenue summary.</li>
+  <li><strong>Ratings:</strong> driver leaderboard &amp; all passenger reviews.</li>
+  <li><strong>Ads:</strong> manage promotional cards shown in the passenger app.</li>
+</ul>
+
+<h3>6.3 Driver Mobile App Features</h3>
+<div class="grid2">
+  <ul>
+    <li>Driver registration with referral code</li>
+    <li>Secure login (token in encrypted storage)</li>
+    <li>Online / Offline availability toggle</li>
+    <li>Always-online background foreground service</li>
+    <li>Real-time ride-request notifications (push)</li>
+    <li>Accept / Decline with live request preview</li>
+    <li>Collapsible request card for map visibility</li>
+    <li>Live GPS navigation with heading arrow</li>
+  </ul>
+  <ul>
+    <li>Ride status controls (arrived, start, complete)</li>
+    <li>One-tap Google Maps navigation</li>
+    <li>Wallet: balance, fee scheme, transaction history</li>
+    <li>Low-balance warnings &amp; per-ride fee preview</li>
+    <li>Referral code sharing &amp; bonus tracking</li>
+    <li>Trip history</li>
+    <li>Profile management</li>
+    <li>Guided background-location permission flow</li>
+  </ul>
+</div>
+
+<!-- SECURITY -->
+<h2>7. Security &amp; Reliability</h2>
+<ul>
+  <li><strong>Encrypted credentials:</strong> passwords hashed with bcrypt; auth tokens stored in the Android Keystore.</li>
+  <li><strong>Live status enforcement:</strong> suspended/banned drivers are blocked on every request, not just at login.</li>
+  <li><strong>Rate limiting:</strong> brute-force login protection and Google Maps cost protection via Redis counters.</li>
+  <li><strong>No leaked internals:</strong> network errors shown to users are sanitized — the backend domain is never exposed.</li>
+  <li><strong>Input validation:</strong> every API request is schema-validated (Zod) before processing.</li>
+  <li><strong>Resilient FCM:</strong> push tokens self-heal on every app launch, so notifications keep working across reinstalls and updates.</li>
+  <li><strong>Always-on hosting:</strong> the backend runs under a process manager with auto-restart, behind Nginx with HTTPS.</li>
+</ul>
+
+<div class="box amber" style="margin-top:24px;">
+  <strong>Conclusion.</strong> MovSikel is a complete, deployed, and operational ride-hailing system — not a prototype. It combines a fast geospatial matching engine, a guaranteed-collection revenue model tailored to the cash-based tricycle market, real-time tracking on the same infrastructure patterns as major platforms, and a polished driver experience that works even in the background. The architecture is built to scale from the Kidapawan pilot to a multi-city operation.
+</div>
+
+<footer>MovSikel · Confidential — System Architecture &amp; Feature Report</footer>
+
+</body>
+</html>

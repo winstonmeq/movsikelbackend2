@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import { haversineDistanceMeters } from '@/lib/geo';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers, emitToUser } from '@/lib/realtime';
+import { getNearbyOnlineDriverIds } from '@/lib/redis';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 
@@ -37,8 +37,19 @@ export function dispatchSearchRadiusMeters() {
 type LatLng = { lat: number; lng: number };
 
 /**
- * Builds the ordered driver queue (nearest first) for a pickup. Excludes the
- * dummy driver and any driver who already declined this ride.
+ * Builds the ordered driver queue (nearest first) for a pickup.
+ *
+ * Presence comes from REDIS — the same live, TTL'd set the admin Live Map reads
+ * — so "online on the map" and "eligible for dispatch" can never drift apart.
+ * Mongo is consulted only to confirm identity (still a driver, still online,
+ * not banned/suspended); it is NOT the freshness authority anymore. The Redis
+ * TTL ({@link DRIVER_LOCATION_TTL}, 60s) is.
+ *
+ * Falls back to a Mongo `$near` query when Redis has no presence data at all
+ * (e.g. Redis was flushed) so dispatch degrades gracefully rather than finding
+ * zero drivers.
+ *
+ * Excludes any driver in `excludeDriverIds` (declined / already offered).
  */
 export async function buildDispatchQueue(
   pickup: LatLng,
@@ -46,6 +57,34 @@ export async function buildDispatchQueue(
   excludeDriverIds: mongoose.Types.ObjectId[] = []
 ): Promise<mongoose.Types.ObjectId[]> {
   const excludeStr = new Set(excludeDriverIds.map(String));
+
+  // 1) Live, nearby presence from Redis (nearest-first). null => Redis empty.
+  const nearbyIds = await getNearbyOnlineDriverIds(pickup, radiusMeters);
+
+  if (nearbyIds !== null) {
+    if (nearbyIds.length === 0) return [];
+    const candidates = nearbyIds.filter((id) => !excludeStr.has(id));
+    if (candidates.length === 0) return [];
+
+    // Confirm identity/eligibility in Mongo, preserving Redis's distance order.
+    const objectIds = candidates.map((id) => new mongoose.Types.ObjectId(id));
+    const eligible = await User.find({
+      _id: { $in: objectIds },
+      role: 'driver',
+      online: true,
+      status: 'active'
+    })
+      .select('_id')
+      .lean();
+
+    const eligibleSet = new Set(eligible.map((d: any) => String(d._id)));
+    return candidates
+      .filter((id) => eligibleSet.has(id))
+      .slice(0, 50)
+      .map((id) => new mongoose.Types.ObjectId(id));
+  }
+
+  // 2) Redis empty — fall back to Mongo $near + the 2-min freshness window.
   const drivers = await User.find({
     role: 'driver',
     ...onlineDriverFilter(),
@@ -60,7 +99,6 @@ export async function buildDispatchQueue(
     .limit(50)
     .lean();
 
-  // $near already returns nearest-first; just filter exclusions.
   return drivers
     .map((d: any) => d._id as mongoose.Types.ObjectId)
     .filter((id) => !excludeStr.has(String(id)));
@@ -140,6 +178,44 @@ export async function startDispatch(rideId: string) {
 }
 
 /**
+ * Re-scans live presence and APPENDS any newly-eligible drivers to the tail of
+ * the ride's existing `dispatchQueue`, preserving the order already offered.
+ *
+ * This is the fix for the "frozen queue" problem: the original queue was built
+ * once at request time, so a driver who came online (or whose Redis presence
+ * refreshed) AFTER the booking could never be offered the ride, even while
+ * polling. Rebuilding before each stage advance lets late-arriving drivers
+ * still receive the request on a later stage.
+ *
+ * Already-queued and already-declined drivers are excluded so no one is offered
+ * twice and the existing progression index stays valid.
+ */
+async function refreshQueueTail(rideId: string) {
+  const ride = await Ride.findById(rideId)
+    .select('status pickup dispatchQueue declinedDriverIds')
+    .lean();
+  if (!ride || ride.status !== 'requested') return;
+
+  const existing = (ride.dispatchQueue || []) as mongoose.Types.ObjectId[];
+  const declined = (ride.declinedDriverIds || []) as mongoose.Types.ObjectId[];
+  const pickup = (ride as any).pickup;
+  if (!pickup) return;
+
+  const fresh = await buildDispatchQueue(
+    { lat: pickup.lat, lng: pickup.lng },
+    dispatchSearchRadiusMeters(),
+    [...existing, ...declined]
+  );
+  if (fresh.length === 0) return;
+
+  // Append only — never reorder what's already been offered.
+  await Ride.updateOne(
+    { _id: rideId, status: 'requested' },
+    { $push: { dispatchQueue: { $each: fresh } } }
+  );
+}
+
+/**
  * Lazy progress check. If the ride is still `requested` and its current offer
  * has expired, advance to the next stage. Safe to call on every poll; it only
  * does work when the window has actually lapsed. Idempotent under races because
@@ -151,6 +227,10 @@ export async function progressDispatchIfNeeded(rideId: string) {
 
   const expiresAt = ride.offerExpiresAt ? new Date(ride.offerExpiresAt).getTime() : 0;
   if (!expiresAt || Date.now() < expiresAt) return ride; // still within window
+
+  // Pull in any drivers who became eligible since the queue was last built, so a
+  // late-arriving driver still gets offered the ride on this (or a later) stage.
+  await refreshQueueTail(rideId);
 
   const nextIndex = (ride.dispatchIndex ?? 0) + 1;
   return applyStage(rideId, nextIndex);

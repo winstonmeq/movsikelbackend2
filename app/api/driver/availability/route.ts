@@ -44,14 +44,30 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     if (auth.role !== 'driver') return fail('Only drivers can update availability', 403);
 
     const body = schema.parse(await req.json());
+
+    const hasLocation = typeof body.lat === 'number' && typeof body.lng === 'number';
+
+    // A driver going online MUST supply a location (or already have one on file).
+    // Otherwise they'd be online but invisible to dispatch — the silent
+    // "online but never offered a ride" failure. We check the existing record so
+    // a driver who already has a recent location can re-toggle online without a
+    // fresh fix in hand.
+    if (body.online && !hasLocation) {
+      const existing = await User.findById(auth.sub).select('currentLocation').lean();
+      const existingCoords = (existing as any)?.currentLocation?.coordinates;
+      if (!Array.isArray(existingCoords) || existingCoords.length < 2) {
+        return fail('Waiting for your location. Enable GPS and try going online again.', 409);
+      }
+    }
+
     const update: Record<string, unknown> = {
       online: body.online,
       lastSeenAt: body.online ? new Date() : null
     };
 
-    if (typeof body.lat === 'number' && typeof body.lng === 'number') {
-      if (!isValidLatLng({ lat: body.lat, lng: body.lng })) return fail('Invalid driver location');
-      update.currentLocation = toPoint({ lat: body.lat, lng: body.lng });
+    if (hasLocation) {
+      if (!isValidLatLng({ lat: body.lat!, lng: body.lng! })) return fail('Invalid driver location');
+      update.currentLocation = toPoint({ lat: body.lat!, lng: body.lng! });
     }
     if (typeof body.heading === 'number') update.heading = body.heading;
 
