@@ -31,7 +31,7 @@ const schema = z.object({
   passengerCount: z.number().int().min(1, 'Number of passengers must be at least 1.').optional(),
   distanceMeters: z.number().optional(),
   durationSeconds: z.number().optional(),
-  searchRadiusMeters: z.number().min(500).max(50000).optional()
+  searchRadiusMeters: z.number().min(100).max(50000).optional()
 });
 
 function estimateFare(distanceMeters?: number) {
@@ -92,7 +92,7 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     // SAME Redis-first source as every later dispatch stage, so the initial offer
     // wave can't drift from the live presence set. This is the fast path: an
     // in-memory Redis read + a single Mongo eligibility check, no $near.
-    let candidateDriverIds = await buildDispatchQueueWithExpansion(body.pickup, radiusMeters);
+    let candidateDriverIds = await buildDispatchQueueWithExpansion(body.pickup, radiusMeters, [], body.destination);
 
     // The `nearbyDrivers` payload below is COSMETIC only (the passenger's "X
     // drivers nearby" hint + initial markers). It can stay on Mongo $near; it

@@ -23,6 +23,9 @@ type DriverLocation = {
   lng: number;
   heading: number | null;
   updatedAt: number;
+  previousLat?: number;
+  previousLng?: number;
+  previousUpdatedAt?: number;
 };
 
 function driverLocationKey(driverId: string) {
@@ -50,12 +53,26 @@ export async function setDriverLocation(
   lng: number,
   heading?: number
 ) {
+  const previous = await getDriverLocation(driverId);
+  const payload: DriverLocation = {
+    lat,
+    lng,
+    heading: heading ?? null,
+    updatedAt: Date.now()
+  };
+
+  if (previous) {
+    payload.previousLat = previous.lat;
+    payload.previousLng = previous.lng;
+    payload.previousUpdatedAt = previous.updatedAt;
+  }
+
   await redis
     .multi()
     .setex(
       driverLocationKey(driverId),
       DRIVER_LOCATION_TTL,
-      JSON.stringify({ lat, lng, heading: heading ?? null, updatedAt: Date.now() })
+      JSON.stringify(payload)
     )
     .call('GEOADD', DRIVER_GEO_KEY, lng, lat, driverId)
     .exec();
@@ -142,6 +159,26 @@ export async function getNearbyOnlineDriverIds(
   pickup: { lat: number; lng: number },
   radiusMeters: number
 ): Promise<string[] | null> {
+  const locations = await getNearbyOnlineDriverLocations(pickup, radiusMeters);
+  return locations === null ? null : locations.map((location) => location.driverId);
+}
+
+export async function getNearbyOnlineDriverLocations(
+  pickup: { lat: number; lng: number },
+  radiusMeters: number
+): Promise<
+  | {
+      driverId: string;
+      lat: number;
+      lng: number;
+      heading: number | null;
+      updatedAt: number;
+      previousLat?: number;
+      previousLng?: number;
+      previousUpdatedAt?: number;
+    }[]
+  | null
+> {
   const driverIds = (await redis.call(
     'GEOSEARCH',
     DRIVER_GEO_KEY,
@@ -163,16 +200,27 @@ export async function getNearbyOnlineDriverIds(
 
   const values = await redis.mget(...driverIds.map(driverLocationKey));
   const staleDriverIds: string[] = [];
-  const freshDriverIds = driverIds.filter((driverId, i) => {
+  const locations = driverIds
+    .map((driverId, i) => {
     const data = parseDriverLocation(values[i] ?? null);
-    if (data) return true;
+      if (data) return { driverId, ...data };
     staleDriverIds.push(driverId);
-    return false;
-  });
+      return null;
+    })
+    .filter(Boolean) as {
+      driverId: string;
+      lat: number;
+      lng: number;
+      heading: number | null;
+      updatedAt: number;
+      previousLat?: number;
+      previousLng?: number;
+      previousUpdatedAt?: number;
+    }[];
 
   if (staleDriverIds.length > 0) {
     await redis.zrem(DRIVER_GEO_KEY, ...staleDriverIds);
   }
 
-  return freshDriverIds;
+  return locations;
 }

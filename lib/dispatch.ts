@@ -2,11 +2,12 @@ import mongoose from 'mongoose';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers, emitToUser } from '@/lib/realtime';
 import {
-  getNearbyOnlineDriverIds,
+  getNearbyOnlineDriverLocations,
   releaseDriverReservations,
   reservedDriverIdSet,
   reserveDriversForRide
 } from '@/lib/redis';
+import { angleDifferenceDegrees, bearingDegrees, haversineDistanceMeters } from '@/lib/geo';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 
@@ -72,7 +73,18 @@ export function dispatchSearchRadiiMeters(startRadius = dispatchSearchRadiusMete
 }
 
 type LatLng = { lat: number; lng: number };
+type LiveDriverLocation = {
+  driverId: string;
+  lat: number;
+  lng: number;
+  updatedAt: number;
+  previousLat?: number;
+  previousLng?: number;
+  previousUpdatedAt?: number;
+};
 const ACTIVE_DRIVER_RIDE_STATUSES = ['accepted', 'arrived', 'in_progress'] as const;
+const MIN_MOVEMENT_DIRECTION_METERS = 8;
+const MAX_PREVIOUS_LOCATION_AGE_MS = 120_000;
 
 async function busyDriverIdSet(driverIds: mongoose.Types.ObjectId[]) {
   if (driverIds.length === 0) return new Set<string>();
@@ -85,6 +97,53 @@ async function busyDriverIdSet(driverIds: mongoose.Types.ObjectId[]) {
     .lean();
 
   return new Set(activeRides.map((ride: any) => String(ride.driverId)));
+}
+
+function movementBearing(location: LiveDriverLocation) {
+  if (
+    typeof location.previousLat !== 'number' ||
+    typeof location.previousLng !== 'number' ||
+    typeof location.previousUpdatedAt !== 'number' ||
+    location.updatedAt - location.previousUpdatedAt > MAX_PREVIOUS_LOCATION_AGE_MS
+  ) {
+    return null;
+  }
+
+  const previous = { lat: location.previousLat, lng: location.previousLng };
+  const current = { lat: location.lat, lng: location.lng };
+  const movementMeters = haversineDistanceMeters(previous, current);
+  if (movementMeters < MIN_MOVEMENT_DIRECTION_METERS) return null;
+
+  return bearingDegrees(previous, current);
+}
+
+function directionAdjustedDistanceMeters(location: LiveDriverLocation, pickup: LatLng, destination?: LatLng) {
+  const current = { lat: location.lat, lng: location.lng };
+  const distanceMeters = haversineDistanceMeters(current, pickup);
+  const movement = movementBearing(location);
+  if (movement === null) return distanceMeters;
+
+  const pickupAngle = angleDifferenceDegrees(movement, bearingDegrees(current, pickup));
+  const pickupBonus = Math.max(0, (90 - pickupAngle) / 90) * 120;
+  const pickupPenalty = pickupAngle > 135 ? 80 : 0;
+  const routeBonus = destination
+    ? Math.max(0, (75 - angleDifferenceDegrees(movement, bearingDegrees(pickup, destination))) / 75) * 40
+    : 0;
+
+  return distanceMeters - pickupBonus - routeBonus + pickupPenalty;
+}
+
+function sortByDistanceAndDirection(
+  locations: LiveDriverLocation[],
+  pickup: LatLng,
+  destination?: LatLng
+) {
+  return [...locations].sort((a, b) => {
+    const scoreA = directionAdjustedDistanceMeters(a, pickup, destination);
+    const scoreB = directionAdjustedDistanceMeters(b, pickup, destination);
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return haversineDistanceMeters({ lat: a.lat, lng: a.lng }, pickup) - haversineDistanceMeters({ lat: b.lat, lng: b.lng }, pickup);
+  });
 }
 
 /**
@@ -105,20 +164,26 @@ async function busyDriverIdSet(driverIds: mongoose.Types.ObjectId[]) {
 export async function buildDispatchQueue(
   pickup: LatLng,
   radiusMeters: number,
-  excludeDriverIds: mongoose.Types.ObjectId[] = []
+  excludeDriverIds: mongoose.Types.ObjectId[] = [],
+  destination?: LatLng
 ): Promise<mongoose.Types.ObjectId[]> {
   const excludeStr = new Set(excludeDriverIds.map(String));
 
   // 1) Live, nearby presence from Redis (nearest-first). null => Redis empty.
-  const nearbyIds = await getNearbyOnlineDriverIds(pickup, radiusMeters);
+  const nearbyLocations = await getNearbyOnlineDriverLocations(pickup, radiusMeters);
 
-  if (nearbyIds !== null) {
-    if (nearbyIds.length === 0) return [];
-    const candidates = nearbyIds.filter((id) => !excludeStr.has(id));
+  if (nearbyLocations !== null) {
+    if (nearbyLocations.length === 0) return [];
+    const candidates = sortByDistanceAndDirection(
+      nearbyLocations.filter((location) => !excludeStr.has(location.driverId)),
+      pickup,
+      destination
+    );
     if (candidates.length === 0) return [];
+    const candidateIds = candidates.map((location) => location.driverId);
 
     // Confirm identity/eligibility in Mongo, preserving Redis's distance order.
-    const objectIds = candidates.map((id) => new mongoose.Types.ObjectId(id));
+    const objectIds = candidateIds.map((id) => new mongoose.Types.ObjectId(id));
     const eligible = await User.find({
       _id: { $in: objectIds },
       role: 'driver',
@@ -130,8 +195,8 @@ export async function buildDispatchQueue(
 
     const eligibleSet = new Set(eligible.map((d: any) => String(d._id)));
     const busySet = await busyDriverIdSet(eligible.map((d: any) => d._id));
-    const reservedSet = await reservedDriverIdSet(candidates);
-    return candidates
+    const reservedSet = await reservedDriverIdSet(candidateIds);
+    return candidateIds
       .filter((id) => eligibleSet.has(id) && !busySet.has(id) && !reservedSet.has(id))
       .slice(0, 50)
       .map((id) => new mongoose.Types.ObjectId(id));
@@ -162,12 +227,13 @@ export async function buildDispatchQueue(
 export async function buildDispatchQueueWithExpansion(
   pickup: LatLng,
   startRadiusMeters = dispatchSearchRadiusMeters(),
-  excludeDriverIds: mongoose.Types.ObjectId[] = []
+  excludeDriverIds: mongoose.Types.ObjectId[] = [],
+  destination?: LatLng
 ): Promise<mongoose.Types.ObjectId[]> {
   const exclude = [...excludeDriverIds];
 
   for (const radiusMeters of dispatchSearchRadiiMeters(startRadiusMeters)) {
-    const queue = await buildDispatchQueue(pickup, radiusMeters, exclude);
+    const queue = await buildDispatchQueue(pickup, radiusMeters, exclude, destination);
     if (queue.length > 0) return queue;
   }
 
@@ -322,7 +388,7 @@ export async function startDispatch(rideId: string) {
  */
 async function refreshQueueTail(rideId: string) {
   const ride = await Ride.findById(rideId)
-    .select('status pickup dispatchQueue declinedDriverIds')
+    .select('status pickup destination dispatchQueue declinedDriverIds')
     .lean();
   if (!ride || ride.status !== 'requested') return;
 
@@ -334,7 +400,8 @@ async function refreshQueueTail(rideId: string) {
   const fresh = await buildDispatchQueueWithExpansion(
     { lat: pickup.lat, lng: pickup.lng },
     dispatchSearchRadiusMeters(),
-    [...existing, ...declined]
+    [...existing, ...declined],
+    (ride as any).destination ? { lat: (ride as any).destination.lat, lng: (ride as any).destination.lng } : undefined
   );
   if (fresh.length === 0) return;
 

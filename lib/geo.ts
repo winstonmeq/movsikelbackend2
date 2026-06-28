@@ -36,6 +36,23 @@ export function estimateDurationSeconds(distanceMeters: number, averageKph = Num
   return Math.max(Math.round((km / safeKph) * 3600), 60);
 }
 
+export function bearingDegrees(a: LatLng, b: LatLng) {
+  const lat1 = degToRad(a.lat);
+  const lat2 = degToRad(b.lat);
+  const dLng = degToRad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (radToDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+export function angleDifferenceDegrees(a: number, b: number) {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
+
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
+}
+
+function radToDeg(rad: number) {
+  return (rad * 180) / Math.PI;
 }
