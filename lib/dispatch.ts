@@ -205,6 +205,7 @@ async function applyStage(rideId: string, index: number) {
   if (!ride || ride.status !== 'requested') return ride;
 
   const queue = (ride.dispatchQueue || []) as mongoose.Types.ObjectId[];
+  const previousOfferDriverIds = ((ride.currentOfferDriverIds || []) as mongoose.Types.ObjectId[]).map(String);
   const declined = new Set(
     ((ride.declinedDriverIds || []) as mongoose.Types.ObjectId[]).map(String)
   );
@@ -252,6 +253,10 @@ async function applyStage(rideId: string, index: number) {
       { returnDocument: 'after' }
     ).lean();
     if (!updated) return Ride.findById(rideId).lean();
+    await releaseDriverReservations(previousOfferDriverIds, rideId);
+    if (previousOfferDriverIds.length > 0) {
+      emitToUsers(previousOfferDriverIds, 'ride:update', { ride: updated, offerExpired: true });
+    }
     emitToUser(String(ride.passengerId), 'ride:update', { ride: updated });
     return updated;
   }
@@ -281,6 +286,13 @@ async function applyStage(rideId: string, index: number) {
   if (!updated) {
     await releaseDriverReservations(slice.map(String), rideId);
     return Ride.findById(rideId).lean();
+  }
+
+  const newOfferSet = new Set(slice.map(String));
+  const expiredOfferDriverIds = previousOfferDriverIds.filter((id) => !newOfferSet.has(id));
+  await releaseDriverReservations(expiredOfferDriverIds, rideId);
+  if (expiredOfferDriverIds.length > 0) {
+    emitToUsers(expiredOfferDriverIds, 'ride:update', { ride: updated, offerExpired: true });
   }
 
   emitToUsers(slice.map(String), 'ride:request', { ride: updated }, {
