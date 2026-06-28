@@ -1,4 +1,4 @@
-# MovSikel Backend
+# Backend
 
 Next.js API plus Socket.IO realtime server for the MovSikel passenger and MovSikel Driver apps.
 
@@ -65,7 +65,7 @@ Server emits:
 Create a `.env` file inside this `backend` folder before running the server:
 
 ```env
-MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/movsikel?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/db?retryWrites=true&w=majority
 JWT_SECRET=change-this-to-a-long-random-secret
 GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 PORT=4000
