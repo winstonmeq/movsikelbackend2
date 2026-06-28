@@ -20,6 +20,19 @@ export interface IRideLocation {
   lng: number;
 }
 
+export interface IRideDispatchMetrics {
+  dispatchStartedAt?: Date;
+  firstOfferedAt?: Date;
+  lastOfferedAt?: Date;
+  noDriversAt?: Date;
+  firstOfferLatencyMs?: number;
+  acceptLatencyMs?: number;
+  dispatchStageCount?: number;
+  offeredDriverCount?: number;
+  acceptedStageIndex?: number;
+  acceptDistanceMeters?: number;
+}
+
 export interface IRide {
   passengerId: mongoose.Types.ObjectId;
   driverId?: mongoose.Types.ObjectId;
@@ -41,6 +54,7 @@ export interface IRide {
   dispatchIndex: number;
   currentOfferDriverIds: mongoose.Types.ObjectId[];
   offerExpiresAt?: Date;
+  dispatchMetrics?: IRideDispatchMetrics;
   acceptedAt?: Date;
   arrivedAt?: Date;
   startedAt?: Date;
@@ -65,6 +79,22 @@ const locationSchema = new mongoose.Schema<IRideLocation>(
     address: { type: String, required: true },
     lat: { type: Number, required: true },
     lng: { type: Number, required: true }
+  },
+  { _id: false }
+);
+
+const dispatchMetricsSchema = new mongoose.Schema<IRideDispatchMetrics>(
+  {
+    dispatchStartedAt: { type: Date },
+    firstOfferedAt: { type: Date },
+    lastOfferedAt: { type: Date },
+    noDriversAt: { type: Date },
+    firstOfferLatencyMs: { type: Number },
+    acceptLatencyMs: { type: Number },
+    dispatchStageCount: { type: Number },
+    offeredDriverCount: { type: Number },
+    acceptedStageIndex: { type: Number },
+    acceptDistanceMeters: { type: Number }
   },
   { _id: false }
 );
@@ -98,6 +128,7 @@ const rideSchema = new mongoose.Schema<IRide>(
     dispatchIndex: { type: Number, default: 0 },
     currentOfferDriverIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     offerExpiresAt: { type: Date },
+    dispatchMetrics: { type: dispatchMetricsSchema, default: undefined },
     acceptedAt: { type: Date },
     arrivedAt: { type: Date },
     startedAt: { type: Date },

@@ -5,6 +5,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { emitToUsers } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
+import { releaseDriverReservations } from '@/lib/redis';
 import { Ride } from '@/models/Ride';
 
 export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
@@ -34,6 +35,7 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     ride.status = 'cancelled';
     ride.cancelledAt = new Date();
     await ride.save();
+    await releaseDriverReservations((ride.currentOfferDriverIds || []).map(String), String(ride._id));
 
     // Notify everyone who could be showing this ride: the passenger, the
     // assigned driver (if accepted), and ALL drivers who were ever offered it

@@ -1,7 +1,12 @@
 import mongoose from 'mongoose';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers, emitToUser } from '@/lib/realtime';
-import { getNearbyOnlineDriverIds } from '@/lib/redis';
+import {
+  getNearbyOnlineDriverIds,
+  releaseDriverReservations,
+  reservedDriverIdSet,
+  reserveDriversForRide
+} from '@/lib/redis';
 import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 
@@ -32,6 +37,38 @@ export function firstBatchSize() {
 
 export function dispatchSearchRadiusMeters() {
   return Number(process.env.DRIVER_SEARCH_RADIUS_METERS || 5000);
+}
+
+export function dispatchSearchMaxRadiusMeters() {
+  return Number(process.env.DRIVER_SEARCH_MAX_RADIUS_METERS || dispatchSearchRadiusMeters());
+}
+
+export function dispatchSearchRadiusExpansionMeters() {
+  return Number(process.env.DRIVER_SEARCH_RADIUS_EXPANSION_METERS || 500);
+}
+
+function reservationTtlMs() {
+  return offerWindowMs() + Number(process.env.DRIVER_RESERVATION_GRACE_MS || 1000);
+}
+
+export function dispatchSearchRadiiMeters(startRadius = dispatchSearchRadiusMeters()) {
+  const maxRadius = Math.max(startRadius, dispatchSearchMaxRadiusMeters());
+  const expansion = dispatchSearchRadiusExpansionMeters();
+  const radii = [startRadius];
+
+  if (!Number.isFinite(expansion) || expansion <= 0) return radii;
+
+  let nextRadius = startRadius + expansion;
+  while (nextRadius <= maxRadius) {
+    radii.push(nextRadius);
+    nextRadius += expansion;
+  }
+
+  if (radii[radii.length - 1] !== maxRadius) {
+    radii.push(maxRadius);
+  }
+
+  return [...new Set(radii.map((radius) => Math.round(radius)))];
 }
 
 type LatLng = { lat: number; lng: number };
@@ -93,8 +130,9 @@ export async function buildDispatchQueue(
 
     const eligibleSet = new Set(eligible.map((d: any) => String(d._id)));
     const busySet = await busyDriverIdSet(eligible.map((d: any) => d._id));
+    const reservedSet = await reservedDriverIdSet(candidates);
     return candidates
-      .filter((id) => eligibleSet.has(id) && !busySet.has(id))
+      .filter((id) => eligibleSet.has(id) && !busySet.has(id) && !reservedSet.has(id))
       .slice(0, 50)
       .map((id) => new mongoose.Types.ObjectId(id));
   }
@@ -115,9 +153,25 @@ export async function buildDispatchQueue(
     .lean();
 
   const busySet = await busyDriverIdSet(drivers.map((d: any) => d._id));
+  const reservedSet = await reservedDriverIdSet(drivers.map((d: any) => String(d._id)));
   return drivers
     .map((d: any) => d._id as mongoose.Types.ObjectId)
-    .filter((id) => !excludeStr.has(String(id)) && !busySet.has(String(id)));
+    .filter((id) => !excludeStr.has(String(id)) && !busySet.has(String(id)) && !reservedSet.has(String(id)));
+}
+
+export async function buildDispatchQueueWithExpansion(
+  pickup: LatLng,
+  startRadiusMeters = dispatchSearchRadiusMeters(),
+  excludeDriverIds: mongoose.Types.ObjectId[] = []
+): Promise<mongoose.Types.ObjectId[]> {
+  const exclude = [...excludeDriverIds];
+
+  for (const radiusMeters of dispatchSearchRadiiMeters(startRadiusMeters)) {
+    const queue = await buildDispatchQueue(pickup, radiusMeters, exclude);
+    if (queue.length > 0) return queue;
+  }
+
+  return [];
 }
 
 /**
@@ -154,6 +208,9 @@ async function applyStage(rideId: string, index: number) {
   const declined = new Set(
     ((ride.declinedDriverIds || []) as mongoose.Types.ObjectId[]).map(String)
   );
+  const dispatchStartedAt = (ride as any).dispatchMetrics?.dispatchStartedAt
+    ? new Date((ride as any).dispatchMetrics.dispatchStartedAt)
+    : new Date((ride as any).createdAt || Date.now());
 
   // Walk forward to the next stage that actually has a non-declined driver to
   // offer. A stage whose only driver already declined must be SKIPPED (advance
@@ -161,21 +218,36 @@ async function applyStage(rideId: string, index: number) {
   // single-driver stage would prematurely end the ride while later drivers
   // remain. We stop when we find a real slice or run off the end of the queue.
   let stageIndex = index;
-  let slice = offerSliceForIndex(queue, stageIndex).filter((id) => !declined.has(String(id)));
-  while (slice.length === 0 && !isQueueExhausted(queue, stageIndex)) {
+  let slice: mongoose.Types.ObjectId[] = [];
+  while (!isQueueExhausted(queue, stageIndex)) {
+    const candidateSlice = offerSliceForIndex(queue, stageIndex).filter((id) => !declined.has(String(id)));
+    if (candidateSlice.length > 0) {
+      const reserved = await reserveDriversForRide(
+        candidateSlice.map(String),
+        rideId,
+        reservationTtlMs()
+      );
+      const reservedSet = new Set(reserved);
+      slice = candidateSlice.filter((id) => reservedSet.has(String(id)));
+      if (slice.length > 0) break;
+    }
     stageIndex += 1;
-    slice = offerSliceForIndex(queue, stageIndex).filter((id) => !declined.has(String(id)));
   }
 
   if (slice.length === 0) {
     // Genuinely no more drivers to try.
+    const now = new Date();
     const updated = await Ride.findOneAndUpdate(
       { _id: rideId, status: 'requested' },
       {
-        status: 'no_drivers',
-        currentOfferDriverIds: [],
-        candidateDriverIds: [],
-        offerExpiresAt: undefined
+        $set: {
+          status: 'no_drivers',
+          currentOfferDriverIds: [],
+          candidateDriverIds: [],
+          'dispatchMetrics.noDriversAt': now,
+          'dispatchMetrics.dispatchStageCount': Math.max(stageIndex, 0)
+        },
+        $unset: { offerExpiresAt: 1 }
       },
       { returnDocument: 'after' }
     ).lean();
@@ -184,18 +256,32 @@ async function applyStage(rideId: string, index: number) {
     return updated;
   }
 
+  const now = new Date();
   const expires = new Date(Date.now() + offerWindowMs());
   const updated = await Ride.findOneAndUpdate(
     { _id: rideId, status: 'requested' },
     {
-      dispatchIndex: stageIndex,
-      currentOfferDriverIds: slice,
-      candidateDriverIds: slice,
-      offerExpiresAt: expires
+      $set: {
+        dispatchIndex: stageIndex,
+        currentOfferDriverIds: slice,
+        candidateDriverIds: slice,
+        offerExpiresAt: expires,
+        'dispatchMetrics.firstOfferedAt': (ride as any).dispatchMetrics?.firstOfferedAt || now,
+        'dispatchMetrics.lastOfferedAt': now,
+        'dispatchMetrics.firstOfferLatencyMs':
+          (ride as any).dispatchMetrics?.firstOfferLatencyMs ?? now.getTime() - dispatchStartedAt.getTime(),
+        'dispatchMetrics.dispatchStageCount': stageIndex + 1
+      },
+      $inc: {
+        'dispatchMetrics.offeredDriverCount': slice.length
+      }
     },
     { returnDocument: 'after' }
   ).lean();
-  if (!updated) return Ride.findById(rideId).lean();
+  if (!updated) {
+    await releaseDriverReservations(slice.map(String), rideId);
+    return Ride.findById(rideId).lean();
+  }
 
   emitToUsers(slice.map(String), 'ride:request', { ride: updated }, {
     title: 'New ride request',
@@ -233,7 +319,7 @@ async function refreshQueueTail(rideId: string) {
   const pickup = (ride as any).pickup;
   if (!pickup) return;
 
-  const fresh = await buildDispatchQueue(
+  const fresh = await buildDispatchQueueWithExpansion(
     { lat: pickup.lat, lng: pickup.lng },
     dispatchSearchRadiusMeters(),
     [...existing, ...declined]
@@ -293,6 +379,8 @@ export async function advanceDispatchOnDecline(rideId: string, declinerId: strin
     .select('status dispatchIndex currentOfferDriverIds')
     .lean();
   if (!ride || ride.status !== 'requested') return ride;
+
+  await releaseDriverReservations([declinerId], rideId);
 
   const current = (ride.currentOfferDriverIds || []).map(String);
   if (current.length > 0) return ride;

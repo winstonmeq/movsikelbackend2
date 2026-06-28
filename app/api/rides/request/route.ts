@@ -7,7 +7,7 @@ import { fail, ok } from '@/lib/http';
 import { isValidLatLng } from '@/lib/geo';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers } from '@/lib/realtime';
-import { startDispatch, buildDispatchQueue, dispatchSearchRadiusMeters } from '@/lib/dispatch';
+import { startDispatch, buildDispatchQueueWithExpansion, dispatchSearchRadiusMeters } from '@/lib/dispatch';
 import '@/lib/dispatchWorker'; // self-starts the background progression timer (VPS)
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
@@ -92,7 +92,7 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     // SAME Redis-first source as every later dispatch stage, so the initial offer
     // wave can't drift from the live presence set. This is the fast path: an
     // in-memory Redis read + a single Mongo eligibility check, no $near.
-    let candidateDriverIds = await buildDispatchQueue(body.pickup, radiusMeters);
+    let candidateDriverIds = await buildDispatchQueueWithExpansion(body.pickup, radiusMeters);
 
     // The `nearbyDrivers` payload below is COSMETIC only (the passenger's "X
     // drivers nearby" hint + initial markers). It can stay on Mongo $near; it
@@ -139,7 +139,12 @@ export const POST = withLogger(async function POST(req: NextRequest) {
       candidateDriverIds: [],
       dispatchQueue,
       dispatchIndex: 0,
-      currentOfferDriverIds: []
+      currentOfferDriverIds: [],
+      dispatchMetrics: {
+        dispatchStartedAt: new Date(),
+        dispatchStageCount: 0,
+        offeredDriverCount: 0
+      }
     });
 
     // Offer to the first batch (or mark no_drivers if the queue is empty).

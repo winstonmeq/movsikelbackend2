@@ -16,6 +16,7 @@ export default redis;
 export const DRIVER_LOCATION_TTL = 60;
 const DRIVER_LOCATION_PREFIX = 'driver:location:';
 const DRIVER_GEO_KEY = 'drivers:geo';
+const DRIVER_RESERVATION_PREFIX = 'driver:reserved:';
 
 type DriverLocation = {
   lat: number;
@@ -26,6 +27,10 @@ type DriverLocation = {
 
 function driverLocationKey(driverId: string) {
   return `${DRIVER_LOCATION_PREFIX}${driverId}`;
+}
+
+function driverReservationKey(driverId: string) {
+  return `${DRIVER_RESERVATION_PREFIX}${driverId}`;
 }
 
 function parseDriverLocation(value: string | null): DriverLocation | null {
@@ -62,6 +67,43 @@ export async function getDriverLocation(driverId: string) {
 
 export async function deleteDriverLocation(driverId: string) {
   await redis.multi().del(driverLocationKey(driverId)).zrem(DRIVER_GEO_KEY, driverId).exec();
+}
+
+export async function reserveDriverForRide(driverId: string, rideId: string, ttlMs: number) {
+  const result = await redis.set(driverReservationKey(driverId), rideId, 'PX', ttlMs, 'NX');
+  return result === 'OK';
+}
+
+export async function reserveDriversForRide(driverIds: string[], rideId: string, ttlMs: number) {
+  const reserved: string[] = [];
+  for (const driverId of driverIds) {
+    if (await reserveDriverForRide(driverId, rideId, ttlMs)) {
+      reserved.push(driverId);
+    }
+  }
+  return reserved;
+}
+
+export async function reservedDriverIdSet(driverIds: string[]) {
+  if (driverIds.length === 0) return new Set<string>();
+
+  const values = await redis.mget(...driverIds.map(driverReservationKey));
+  return new Set(driverIds.filter((_, i) => Boolean(values[i])));
+}
+
+export async function releaseDriverReservations(driverIds: string[], rideId: string) {
+  if (driverIds.length === 0) return;
+
+  await Promise.all(
+    driverIds.map((driverId) =>
+      redis.eval(
+        "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+        1,
+        driverReservationKey(driverId),
+        rideId
+      )
+    )
+  );
 }
 
 export async function getAllDriverLocations(): Promise<

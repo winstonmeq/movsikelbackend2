@@ -10,6 +10,7 @@ import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 import { getOrCreateWallet } from '@/lib/wallet';
 import { WALLET_MINIMUM_ACCEPT, computeFee } from '@/lib/fareScheme';
+import { releaseDriverReservations } from '@/lib/redis';
 
 function allowOpenRideAccept() {
   return String(process.env.ALLOW_OPEN_RIDE_ACCEPT || 'false').toLowerCase() === 'true';
@@ -63,7 +64,7 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     }
 
     const existingRide = await Ride.findOne({ _id: new mongoose.Types.ObjectId(rideId), status: 'requested' })
-      .select('currentOfferDriverIds candidateDriverIds passengerId pickup rideType offeredFare fareEstimate')
+      .select('currentOfferDriverIds candidateDriverIds passengerId pickup rideType offeredFare fareEstimate dispatchIndex dispatchMetrics createdAt')
       .lean();
 
     if (!existingRide) return fail('Ride is no longer available', 409);
@@ -113,7 +114,16 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
         // Dispatch is over once accepted — clear the offer state.
         currentOfferDriverIds: [],
         candidateDriverIds: [driverObjectId],
-        offerExpiresAt: undefined
+        offerExpiresAt: undefined,
+        'dispatchMetrics.acceptLatencyMs':
+          Date.now() -
+          new Date(
+            (existingRide as any).dispatchMetrics?.dispatchStartedAt ||
+              (existingRide as any).createdAt ||
+              Date.now()
+          ).getTime(),
+        'dispatchMetrics.acceptedStageIndex': (existingRide as any).dispatchIndex ?? 0,
+        'dispatchMetrics.acceptDistanceMeters': Math.round(distanceToPickup)
       },
       { returnDocument: 'after' }
     )
@@ -121,6 +131,8 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
       .lean();
 
     if (!ride) return fail('Ride is no longer available', 409);
+
+    await releaseDriverReservations(offeredIds, rideId);
 
     const update = { ride, driver };
     const passengerId = String((ride as any).passengerId?._id || (ride as any).passengerId);

@@ -232,8 +232,8 @@ function Users() {
               <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
                 <Th>Name</Th>
                 <Th>Phone</Th>
-                <Th>Role</Th>
-                <Th>Status</Th>
+	                <Th>Role</Th>
+	                <Th>Status</Th>
                 <Th>Actions</Th>
               </tr>
             </thead>
@@ -245,7 +245,7 @@ function Users() {
                     {u.role === 'driver' && u.online && (
                       <span style={{ color: colors.ok, fontSize: 12, marginLeft: 6 }}>● online</span>
                     )}
-                  </Td>
+	                  </Td>
                   <Td>{u.phone}</Td>
                   <Td style={{ textTransform: 'capitalize' }}>{u.role}</Td>
                   <Td>
@@ -475,8 +475,9 @@ function Rides() {
                 <Th>Driver</Th>
                 <Th>Type</Th>
                 <Th>Fare (₱)</Th>
-                <Th>Status</Th>
-              </tr>
+	                <Th>Status</Th>
+	                <Th>Dispatch</Th>
+	              </tr>
             </thead>
             <tbody>
               {rides.map((r) => (
@@ -487,13 +488,16 @@ function Rides() {
                   <Td style={{ textTransform: 'capitalize' }}>{r.rideType}</Td>
                   <Td>{r.offeredFare ?? r.fareEstimate ?? '—'}</Td>
                   <Td>
-                    <StatusBadge status={r.status} />
-                  </Td>
+	                    <StatusBadge status={r.status} />
+	                  </Td>
+	                  <Td>
+	                    <DispatchMetrics ride={r} />
+	                  </Td>
                 </tr>
               ))}
               {rides.length === 0 && (
                 <tr>
-                  <Td colSpan={6} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
+	                  <Td colSpan={7} style={{ color: colors.muted, textAlign: 'center', padding: 24 }}>
                     No rides found.
                   </Td>
                 </tr>
@@ -502,6 +506,52 @@ function Rides() {
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function formatDurationMs(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value < 1000) return `${Math.round(value)}ms`;
+  return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)}s`;
+}
+
+function DispatchMetrics({ ride }: { ride: any }) {
+  const metrics = ride.dispatchMetrics || {};
+  const acceptLatency = formatDurationMs(metrics.acceptLatencyMs);
+  const firstOfferLatency = formatDurationMs(metrics.firstOfferLatencyMs);
+  const acceptDistance =
+    typeof metrics.acceptDistanceMeters === 'number'
+      ? `${Math.round(metrics.acceptDistanceMeters)}m`
+      : null;
+  const stageCount = typeof metrics.dispatchStageCount === 'number' ? metrics.dispatchStageCount : null;
+  const offeredCount = typeof metrics.offeredDriverCount === 'number' ? metrics.offeredDriverCount : null;
+
+  if (!ride.dispatchMetrics) {
+    return <span style={{ color: colors.muted }}>No data</span>;
+  }
+
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.5, minWidth: 150 }}>
+      <div>
+        <strong>
+          {acceptLatency
+            ? `Accepted ${acceptLatency}`
+            : firstOfferLatency
+            ? `First offer ${firstOfferLatency}`
+            : 'Dispatching'}
+        </strong>
+      </div>
+      <div style={{ color: colors.muted }}>
+        Stage {stageCount ?? '-'} / offered {offeredCount ?? 0}
+      </div>
+      <div style={{ color: colors.muted }}>
+        {acceptDistance
+          ? `Accept distance ${acceptDistance}`
+          : metrics.noDriversAt
+          ? `No drivers ${new Date(metrics.noDriversAt).toLocaleTimeString()}`
+          : 'Waiting'}
+      </div>
     </div>
   );
 }
