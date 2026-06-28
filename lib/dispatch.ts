@@ -35,6 +35,20 @@ export function dispatchSearchRadiusMeters() {
 }
 
 type LatLng = { lat: number; lng: number };
+const ACTIVE_DRIVER_RIDE_STATUSES = ['accepted', 'arrived', 'in_progress'] as const;
+
+async function busyDriverIdSet(driverIds: mongoose.Types.ObjectId[]) {
+  if (driverIds.length === 0) return new Set<string>();
+
+  const activeRides = await Ride.find({
+    driverId: { $in: driverIds },
+    status: { $in: ACTIVE_DRIVER_RIDE_STATUSES }
+  })
+    .select('driverId')
+    .lean();
+
+  return new Set(activeRides.map((ride: any) => String(ride.driverId)));
+}
 
 /**
  * Builds the ordered driver queue (nearest first) for a pickup.
@@ -78,8 +92,9 @@ export async function buildDispatchQueue(
       .lean();
 
     const eligibleSet = new Set(eligible.map((d: any) => String(d._id)));
+    const busySet = await busyDriverIdSet(eligible.map((d: any) => d._id));
     return candidates
-      .filter((id) => eligibleSet.has(id))
+      .filter((id) => eligibleSet.has(id) && !busySet.has(id))
       .slice(0, 50)
       .map((id) => new mongoose.Types.ObjectId(id));
   }
@@ -99,9 +114,10 @@ export async function buildDispatchQueue(
     .limit(50)
     .lean();
 
+  const busySet = await busyDriverIdSet(drivers.map((d: any) => d._id));
   return drivers
     .map((d: any) => d._id as mongoose.Types.ObjectId)
-    .filter((id) => !excludeStr.has(String(id)));
+    .filter((id) => !excludeStr.has(String(id)) && !busySet.has(String(id)));
 }
 
 /**
@@ -153,8 +169,8 @@ async function applyStage(rideId: string, index: number) {
 
   if (slice.length === 0) {
     // Genuinely no more drivers to try.
-    const updated = await Ride.findByIdAndUpdate(
-      rideId,
+    const updated = await Ride.findOneAndUpdate(
+      { _id: rideId, status: 'requested' },
       {
         status: 'no_drivers',
         currentOfferDriverIds: [],
@@ -163,13 +179,14 @@ async function applyStage(rideId: string, index: number) {
       },
       { returnDocument: 'after' }
     ).lean();
+    if (!updated) return Ride.findById(rideId).lean();
     emitToUser(String(ride.passengerId), 'ride:update', { ride: updated });
     return updated;
   }
 
   const expires = new Date(Date.now() + offerWindowMs());
-  const updated = await Ride.findByIdAndUpdate(
-    rideId,
+  const updated = await Ride.findOneAndUpdate(
+    { _id: rideId, status: 'requested' },
     {
       dispatchIndex: stageIndex,
       currentOfferDriverIds: slice,
@@ -178,6 +195,7 @@ async function applyStage(rideId: string, index: number) {
     },
     { returnDocument: 'after' }
   ).lean();
+  if (!updated) return Ride.findById(rideId).lean();
 
   emitToUsers(slice.map(String), 'ride:request', { ride: updated }, {
     title: 'New ride request',
@@ -259,24 +277,25 @@ export async function progressDispatchIfNeeded(rideId: string) {
  * was actually in the current offer.
  */
 export async function advanceDispatchOnDecline(rideId: string, declinerId: string) {
-  const ride = await Ride.findById(rideId)
+  const declinerObjectId = new mongoose.Types.ObjectId(declinerId);
+  const ride = await Ride.findOneAndUpdate(
+    {
+      _id: new mongoose.Types.ObjectId(rideId),
+      status: 'requested',
+      currentOfferDriverIds: declinerObjectId
+    },
+    {
+      $pull: { candidateDriverIds: declinerObjectId, currentOfferDriverIds: declinerObjectId },
+      $addToSet: { declinedDriverIds: declinerObjectId }
+    },
+    { returnDocument: 'after' }
+  )
     .select('status dispatchIndex currentOfferDriverIds')
     .lean();
   if (!ride || ride.status !== 'requested') return ride;
 
   const current = (ride.currentOfferDriverIds || []).map(String);
-  if (!current.includes(String(declinerId))) return ride;
-
-  // If others are still in the current batch (first stage of 3), keep waiting
-  // on them; only advance when the offer is now empty of non-decliners.
-  const remaining = current.filter((id) => id !== String(declinerId));
-  if (remaining.length > 0) {
-    await Ride.findByIdAndUpdate(rideId, {
-      currentOfferDriverIds: remaining,
-      candidateDriverIds: remaining
-    });
-    return ride;
-  }
+  if (current.length > 0) return ride;
 
   const nextIndex = (ride.dispatchIndex ?? 0) + 1;
   return applyStage(rideId, nextIndex);

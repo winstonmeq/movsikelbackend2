@@ -5,7 +5,6 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { advanceDispatchOnDecline } from '@/lib/dispatch';
 import { withLogger } from '@/lib/logger';
-import { Ride } from '@/models/Ride';
 
 export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
   try {
@@ -21,20 +20,9 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     const { rideId } = await context.params;
     if (!mongoose.Types.ObjectId.isValid(rideId)) return fail('Invalid ride id');
 
-    const driverObjectId = new mongoose.Types.ObjectId(auth.sub);
-    const ride = await Ride.findOneAndUpdate(
-      { _id: new mongoose.Types.ObjectId(rideId), status: 'requested' },
-      {
-        $pull: { candidateDriverIds: driverObjectId, currentOfferDriverIds: driverObjectId },
-        $addToSet: { declinedDriverIds: driverObjectId }
-      },
-      { returnDocument: 'after' }
-    ).lean();
-
-    if (!ride) return fail('Ride request not found', 404);
-
     // Move straight to the next driver instead of waiting for the 10s window.
-    await advanceDispatchOnDecline(rideId, auth.sub);
+    const ride = await advanceDispatchOnDecline(rideId, auth.sub);
+    if (!ride) return fail('Ride request not found or no longer offered to you', 404);
 
     return ok({ declined: true, rideId });
   } catch (err: unknown) {

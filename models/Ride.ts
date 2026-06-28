@@ -112,6 +112,11 @@ const rideSchema = new mongoose.Schema<IRide>(
   { timestamps: true }
 );
 
+rideSchema.index({ status: 1, offerExpiresAt: 1 });
+rideSchema.index({ status: 1, currentOfferDriverIds: 1, createdAt: -1 });
+rideSchema.index({ passengerId: 1, status: 1, createdAt: -1 });
+rideSchema.index({ driverId: 1, status: 1 });
+
 export const Ride =
   (mongoose.models.Ride as mongoose.Model<IRide>) ||
   mongoose.model<IRide>('Ride', rideSchema);

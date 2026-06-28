@@ -52,6 +52,16 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     if (!driver) return fail('Driver not found', 404);
     if (driver.online !== true) return fail('Go online before accepting a ride', 409);
 
+    const activeRide = await Ride.findOne({
+      driverId: driverObjectId,
+      status: { $in: ['accepted', 'arrived', 'in_progress'] }
+    })
+      .select('_id rideType status')
+      .lean();
+    if (activeRide) {
+      return fail('Complete your current ride before accepting another request', 409);
+    }
+
     const existingRide = await Ride.findOne({ _id: new mongoose.Types.ObjectId(rideId), status: 'requested' })
       .select('currentOfferDriverIds candidateDriverIds passengerId pickup rideType offeredFare fareEstimate')
       .lean();
