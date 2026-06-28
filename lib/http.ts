@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0'
+};
+
 export function ok(data: unknown, status = 200) {
   return NextResponse.json({ ok: true, data }, { status });
+}
+
+export function okNoStore(data: unknown, status = 200) {
+  return NextResponse.json({ ok: true, data }, { status, headers: NO_STORE_HEADERS });
 }
 
 export function fail(message: string, status = 400) {
