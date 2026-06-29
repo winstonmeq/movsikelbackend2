@@ -3,6 +3,9 @@ import Link from 'next/link';
 import styles from './landing.module.css';
 import MapBackground from './MapBackground';
 
+const androidDownloadUrl =
+  'https://drive.usercontent.google.com/download?id=1m1OG1tgdtt6rVMFGaE6gHnkFinwHTrqW&export=download&authuser=0&fbclid=IwY2xjawSvQIFleHRuA2FlbQIxMABicmlkETF5QWF6NWdIaVU1NkQwMVM5c3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjtFreIJQnS7pn7d34YPtfNQxlaSzVNiCmLr6w5DvmYkOtdXZJNlBIgoKyVB_aem_xLtcUftBcqeQ09_ZS5zFHQ';
+
 export const metadata = {
   title: 'MovSikel — Ride your way',
   description:
@@ -173,6 +176,34 @@ export default function LandingPage() {
         ))}
       </section>
 
+      <section className={styles.passengerDownloadSection}>
+        <div className={styles.passengerImageCard}>
+          <Image
+            src="/images/passengerlocal.png"
+            alt="MovSikel passenger app promo for students, teachers, professionals, and local commuters"
+            width={1920}
+            height={1080}
+            className={styles.passengerImage}
+          />
+        </div>
+        <div className={styles.passengerCopy}>
+          <span className={styles.kicker}>For passengers</span>
+          <h2>Book local tricycle rides for school, work, and daily errands.</h2>
+          <p>
+            Students, teachers, professionals, and families can use MovSikel to request
+            nearby tricycle rides with clear pickup, fare, and driver updates.
+          </p>
+          <a
+            href={androidDownloadUrl}
+            className={styles.primaryButton}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download Passenger App
+          </a>
+        </div>
+      </section>
+
       <section id="ride-modes" className={styles.scrollySection}>
         <div className={styles.scrollyGlass}>
           <div className={styles.storyCopy}>
@@ -258,6 +289,15 @@ export default function LandingPage() {
             offers, pickup requests, and a clean experience for everyday commuters.
           </p>
         </div>
+        <div className={styles.localImageCard}>
+          <Image
+            src="/images/driverlocal.png"
+            alt="MovSikel local tricycle driver recruitment banner"
+            width={1920}
+            height={1080}
+            className={styles.localImage}
+          />
+        </div>
       </section>
 
       <section id="download" className={styles.downloadSection}>
@@ -267,7 +307,6 @@ export default function LandingPage() {
             <h2>Ready to move smarter?</h2>
             <p>Download MovSikel and book your next local tricycle ride faster.</p>
           </div>
-          <a href="#" className={styles.downloadButton}>Download for Android</a>
         </div>
       </section>
 

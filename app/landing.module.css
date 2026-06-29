@@ -783,7 +783,12 @@
 }
 
 .localSection {
+  position: relative;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(320px, 1.15fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 52px);
   margin-top: 88px;
   padding: clamp(34px, 5.5vw, 64px);
   border-radius: 44px;
@@ -812,6 +817,25 @@
   max-width: 780px;
 }
 
+.localImageCard {
+  width: 100%;
+  max-width: none;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 30px;
+  background: rgba(255,255,255,.12);
+  box-shadow: 0 24px 64px rgba(0,0,0,.22);
+  transform: rotate(1.2deg);
+}
+
+.localImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 22px;
+  object-fit: cover;
+}
+
 .localSection .kicker,
 .localSection p {
   color: rgba(255,255,255,.78);
@@ -825,11 +849,82 @@
   margin-top: 82px;
 }
 
+.passengerDownloadSection {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(320px, 1.08fr) minmax(0, .92fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 54px);
+  margin-top: 72px;
+  margin-bottom: 84px;
+  padding: clamp(28px, 4.8vw, 56px);
+  border: 1px solid rgba(255,255,255,.78);
+  border-radius: 44px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(0,184,137,.16), transparent 22rem),
+    linear-gradient(135deg, rgba(255,255,255,.86), rgba(255,255,255,.56));
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.92);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+}
+
+.passengerDownloadSection::after {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  right: -170px;
+  top: -210px;
+  border-radius: 44% 56% 51% 49% / 48% 57% 43% 52%;
+  background: rgba(0,184,137,.12);
+  animation: morphPlate 13s ease-in-out infinite alternate;
+}
+
+.passengerImageCard {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding: 10px;
+  border: 1px solid rgba(0,122,90,.16);
+  border-radius: 32px;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 24px 64px rgba(0,91,63,.16);
+}
+
+.passengerImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 24px;
+  object-fit: cover;
+}
+
+.passengerCopy {
+  position: relative;
+  z-index: 1;
+  padding: 8px;
+}
+
+.passengerCopy h2 {
+  margin: 10px 0 12px;
+  font-size: clamp(2rem, 3.5vw, 3.5rem);
+  line-height: .98;
+  letter-spacing: -.065em;
+}
+
+.passengerCopy p {
+  max-width: 560px;
+  margin: 0 0 22px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .downloadCard {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 28px;
   padding: 28px 32px;
@@ -1018,11 +1113,12 @@
   .floatingChip,
   .floatingChip::after,
   .scrollyGlass::before,
-  .sharedPhone,
-  .bookingPhone,
-  .localSection::after,
-  .heroPhoneStage,
-  .storyCopy {
+	  .sharedPhone,
+	  .bookingPhone,
+	  .localSection::after,
+	  .passengerDownloadSection::after,
+	  .heroPhoneStage,
+	  .storyCopy {
     animation: none !important;
   }
 }
@@ -1070,6 +1166,15 @@
     min-height: auto;
   }
 
+  .localSection,
+  .passengerDownloadSection {
+    grid-template-columns: 1fr;
+  }
+
+  .localImageCard {
+    transform: none;
+  }
+
   .storyCopy {
     text-align: center;
     max-width: 720px;
@@ -1085,11 +1190,12 @@
   .nav,
   .hero,
   .featureStrip,
-  .scrollySection,
-  .howSection,
-  .localSection,
-  .downloadSection,
-  .footer {
+	  .scrollySection,
+	  .howSection,
+	  .localSection,
+	  .passengerDownloadSection,
+	  .downloadSection,
+	  .footer {
     width: calc(100% - 24px);
   }
 
@@ -1182,6 +1288,19 @@
 
   .phoneLabel {
     top: -10px;
+  }
+
+  .localSection {
+    padding: 28px;
+    border-radius: 34px;
+  }
+
+  .passengerCopy {
+    text-align: center;
+  }
+
+  .passengerCopy p {
+    margin-inline: auto;
   }
 
   .downloadCard {

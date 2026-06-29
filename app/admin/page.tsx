@@ -34,6 +34,13 @@ type Stats = {
   estimatedRevenue: number;
 };
 
+type PageMeta = {
+  page: number;
+  pages: number;
+  total: number;
+  limit: number;
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -153,11 +160,12 @@ function Users() {
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('all');
   const [status, setStatus] = useState('all');
+  const [pageMeta, setPageMeta] = useState<PageMeta>({ page: 1, pages: 1, total: 0, limit: 50 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<User | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextPage = 1) => {
     setLoading(true);
     setError('');
     try {
@@ -165,9 +173,13 @@ function Users() {
       if (search.trim()) params.set('search', search.trim());
       if (role !== 'all') params.set('role', role);
       if (status !== 'all') params.set('status', status);
+      params.set('page', String(nextPage));
       params.set('limit', '50');
-      const data = await adminFetch<{ users: User[] }>(`/api/admin/users?${params.toString()}`);
+      const data = await adminFetch<{ users: User[]; page: number; pages: number; total: number; limit: number }>(
+        `/api/admin/users?${params.toString()}`
+      );
       setUsers(data.users);
+      setPageMeta({ page: data.page, pages: data.pages, total: data.total, limit: data.limit });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -176,7 +188,7 @@ function Users() {
   }, [search, role, status]);
 
   useEffect(() => {
-    load();
+    load(1);
   }, [role, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -188,10 +200,10 @@ function Users() {
               placeholder="Search name or phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && load()}
-            />
-          </div>
-          <Button onClick={load}>Search</Button>
+	              onKeyDown={(e) => e.key === 'Enter' && load(1)}
+	            />
+	          </div>
+	          <Button onClick={() => load(1)}>Search</Button>
         </div>
         <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
           <div>
@@ -225,7 +237,7 @@ function Users() {
 
       {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+	      <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
@@ -267,18 +279,28 @@ function Users() {
               )}
             </tbody>
           </table>
-        </div>
-      </Card>
+	        </div>
+	      </Card>
+
+	      <PaginationControls
+	        page={pageMeta.page}
+	        pages={pageMeta.pages}
+	        total={pageMeta.total}
+	        limit={pageMeta.limit}
+	        loading={loading}
+	        onPrev={() => load(pageMeta.page - 1)}
+	        onNext={() => load(pageMeta.page + 1)}
+	      />
 
       {editing && (
         <ManageUserModal
           user={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            load();
-          }}
-        />
+	          onSaved={() => {
+	            setEditing(null);
+	            load(pageMeta.page);
+	          }}
+	        />
       )}
     </div>
   );
@@ -434,15 +456,32 @@ function ManageUserModal({
 function Rides() {
   const [rides, setRides] = useState<any[]>([]);
   const [status, setStatus] = useState('all');
+  const [pageMeta, setPageMeta] = useState<PageMeta>({ page: 1, pages: 1, total: 0, limit: 50 });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(async (nextPage = 1) => {
+    setLoading(true);
+    setError('');
+    try {
     const params = new URLSearchParams();
     if (status !== 'all') params.set('status', status);
+      params.set('page', String(nextPage));
     params.set('limit', '50');
-    adminFetch<{ rides: any[] }>(`/api/admin/rides?${params.toString()}`)
-      .then((d) => setRides(d.rides))
-      .catch((e) => setError(e.message));
+      const data = await adminFetch<{ rides: any[]; page: number; pages: number; total: number; limit: number }>(
+        `/api/admin/rides?${params.toString()}`
+      );
+      setRides(data.rides);
+      setPageMeta({ page: data.page, pages: data.pages, total: data.total, limit: data.limit });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    load(1);
   }, [status]);
 
   return (
@@ -465,7 +504,7 @@ function Rides() {
 
       {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
 
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
+	      <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
@@ -505,7 +544,66 @@ function Rides() {
             </tbody>
           </table>
         </div>
-      </Card>
+	      </Card>
+
+	      <PaginationControls
+	        page={pageMeta.page}
+	        pages={pageMeta.pages}
+	        total={pageMeta.total}
+	        limit={pageMeta.limit}
+	        loading={loading}
+	        onPrev={() => load(pageMeta.page - 1)}
+	        onNext={() => load(pageMeta.page + 1)}
+	      />
+	    </div>
+  );
+}
+
+function PaginationControls({
+  page,
+  pages,
+  total,
+  limit,
+  loading,
+  onPrev,
+  onNext
+}: {
+  page: number;
+  pages: number;
+  total: number;
+  limit: number;
+  loading: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const start = total === 0 ? 0 : (page - 1) * limit + 1;
+  const end = Math.min(page * limit, total);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 12,
+        flexWrap: 'wrap'
+      }}
+    >
+      <span style={{ color: colors.muted, fontSize: 13 }}>
+        Showing {start}-{end} of {total}
+      </span>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Button variant="ghost" onClick={onPrev} disabled={loading || page <= 1}>
+          ← Prev
+        </Button>
+        <span style={{ color: colors.muted, fontSize: 13 }}>
+          Page {page} of {Math.max(pages, 1)}
+        </span>
+        <Button variant="ghost" onClick={onNext} disabled={loading || page >= pages}>
+          Next →
+        </Button>
+      </div>
     </div>
   );
 }

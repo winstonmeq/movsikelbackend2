@@ -33,7 +33,7 @@ export function publicUserForAdmin(user: any) {
 }
 
 /** Parses ?page= & ?limit= with sane bounds. */
-export function parsePaging(req: NextRequest, defaultLimit = 20, maxLimit = 100) {
+export function parsePaging(req: NextRequest, defaultLimit = 50, maxLimit = 50) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1);
   const limitRaw = Number(url.searchParams.get('limit') || defaultLimit) || defaultLimit;
