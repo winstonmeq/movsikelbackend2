@@ -27,7 +27,7 @@ async function verifyGoogleToken(idToken: string): Promise<GoogleTokenPayload> {
 
   const data = await res.json();
 
-  // Accept tokens issued for any OAuth client in this project.
+  // Accept tokens issued for the configured OAuth clients in this project.
   // GOOGLE_CLIENT_ID is the web client; GOOGLE_ANDROID_CLIENT_ID is the Android client.
   // If neither env var is set we skip the audience check entirely.
   const allowedAudiences = [
