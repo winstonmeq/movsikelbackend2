@@ -701,7 +701,7 @@ function LiveMap() {
 
     const timer = setInterval(() => {
       if (leafletRef.current && mapRef.current) load();
-    }, 10000); // poll every 10s while the map tab is open
+    }, 3000); // poll every 3s while the map tab is open
 
     return () => {
       cancelled = true;
@@ -762,7 +762,7 @@ function LiveMap() {
             </span>
           )}
         </div>
-        <span style={{ color: colors.muted, fontSize: 12 }}>Auto-refreshes every 10s</span>
+        <span style={{ color: colors.muted, fontSize: 12 }}>Auto-refreshes every 3s</span>
       </Card>
       {error && <Card style={{ color: colors.danger, marginBottom: 12 }}>{error}</Card>}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
