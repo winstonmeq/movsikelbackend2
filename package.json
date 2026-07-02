@@ -8,9 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed:admin": "tsx scripts/seedAdmin.ts",
-    "seed:test-drivers": "tsx scripts/seedTestDrivers.ts",
-    "cleanup:test-drivers": "tsx scripts/cleanupTestDrivers.ts"
+    "seed:admin": "tsx scripts/seedAdmin.ts"
   },
   "dependencies": {
     "bcryptjs": "latest",
