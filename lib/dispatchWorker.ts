@@ -1,22 +1,16 @@
 import { Ride } from '@/models/Ride';
 import { connectDb } from '@/lib/db';
 import { progressDispatchIfNeeded } from '@/lib/dispatch';
+import redis from '@/lib/redis';
 
 /**
- * Background dispatch progression.
+ * Background dispatch progression worker.
  *
- * On a long-lived Node process (the VPS deployment) we can advance unaccepted
- * ride offers on a timer instead of relying on a driver happening to poll
- * /requests. This closes the gap where a ride could stall on an expired offer
- * simply because no driver hit the poll route in that window.
+ * Runs periodically on long-lived server processes (VPS/PM2) to advance
+ * unaccepted ride offers on a timer instead of waiting for a driver to poll.
  *
- * The route-level lazy calls to `progressDispatchIfNeeded` stay as a safety net;
- * both paths are idempotent (each re-reads ride state and is keyed on ride id),
- * so running both is safe.
- *
- * Self-starts once per process on first import (guarded). Serverless deployments
- * that import this module simply get one short-lived interval per cold start,
- * which is harmless — but the intended target is `next start` on a VPS.
+ * In multi-process / cluster mode (4 CPU cores), a lightweight Redis lock ensures
+ * only one worker ticks per interval so processes do not duplicate DB scans.
  */
 
 const TICK_MS = Number(process.env.DISPATCH_WORKER_TICK_MS || 4000);
@@ -27,12 +21,22 @@ type GlobalWithWorker = typeof globalThis & { [GLOBAL_KEY]?: NodeJS.Timeout };
 
 async function tick() {
   try {
+    // Cluster de-duplication: only one worker process across the 4 CPU cores
+    // runs this tick per interval.
+    const tickLockKey = 'lock:dispatchWorker:tick';
+    const acquired = await redis.set(tickLockKey, '1', 'PX', Math.max(1000, TICK_MS - 500), 'NX');
+    if (!acquired) return; // Another cluster worker is handling this tick
+
     await connectDb();
-    // Find requested rides whose current offer window has lapsed. Bounded so a
-    // single tick can't do unbounded work under a backlog.
+
+    // Find requested rides whose current offer window has lapsed (or never got an expiry date)
     const expired = await Ride.find({
       status: 'requested',
-      offerExpiresAt: { $lte: new Date() }
+      $or: [
+        { offerExpiresAt: { $lte: new Date() } },
+        { offerExpiresAt: { $exists: false } },
+        { offerExpiresAt: null }
+      ]
     })
       .select('_id')
       .limit(50)
@@ -53,9 +57,11 @@ async function tick() {
 export function startDispatchWorker() {
   const g = globalThis as GlobalWithWorker;
   if (g[GLOBAL_KEY]) return; // already running in this process
+
   const handle = setInterval(() => {
     void tick();
   }, TICK_MS);
+
   // Don't keep the event loop alive solely for this timer.
   if (typeof handle.unref === 'function') handle.unref();
   g[GLOBAL_KEY] = handle;
