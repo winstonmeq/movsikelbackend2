@@ -44,7 +44,7 @@ type PageMeta = {
 export default function AdminDashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads' | 'wallet' | 'ratings'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'rides' | 'livemap' | 'ads' | 'wallet' | 'ratings' | 'analytics'>('overview');
 
   useEffect(() => {
     if (!getToken()) {
@@ -92,6 +92,7 @@ export default function AdminDashboard() {
             { label: 'Users', value: 'users' },
             { label: 'Rides', value: 'rides' },
             { label: 'Live Map', value: 'livemap' },
+            { label: 'Analytics', value: 'analytics' },
             { label: 'Ads', value: 'ads' },
             { label: 'Wallet', value: 'wallet' },
             { label: 'Ratings', value: 'ratings' },
@@ -103,6 +104,7 @@ export default function AdminDashboard() {
       {tab === 'users' && <Users />}
       {tab === 'rides' && <Rides />}
       {tab === 'livemap' && <LiveMap />}
+      {tab === 'analytics' && <Analytics />}
       {tab === 'ads' && <Ads />}
       {tab === 'wallet' && <Wallet />}
       {tab === 'ratings' && <Ratings />}
@@ -1601,6 +1603,520 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{label}</div>
       {children}
+    </div>
+  );
+}
+
+// ── Analytics Section ────────────────────────────────────────────────────────
+type AnalyticsSummary = {
+  totalDriverHours: number;
+  activeDriverCount: number;
+  onlineDriversNow: number;
+  totalBookings: number;
+  totalCompleted: number;
+  overallCompletionRate: number;
+  totalRevenue: number;
+  peakHour: string;
+};
+
+type AnalyticsDriverStat = {
+  id: string;
+  name: string;
+  phone: string;
+  plateNumber: string;
+  tricycleNumber: string;
+  status: string;
+  isOnline: boolean;
+  onlineSeconds: number;
+  onlineHours: number;
+  totalRides: number;
+  completedRides: number;
+  cancelledRides: number;
+  completionRate: number;
+  totalEarnings: number;
+  rating: number | null;
+};
+
+type PassengerStat = {
+  id: string;
+  name: string;
+  phone: string;
+  homeBarangay: string;
+  totalRequested: number;
+  completedRides: number;
+  cancelledRides: number;
+  totalSpent: number;
+};
+
+type HourlyDistribution = {
+  hour: number;
+  label: string;
+  count: number;
+};
+
+type AnalyticsResponse = {
+  period: string;
+  summary: AnalyticsSummary;
+  drivers: AnalyticsDriverStat[];
+  passengers: PassengerStat[];
+  hourlyDistribution: HourlyDistribution[];
+};
+
+function Analytics() {
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>('today');
+  const [subTab, setSubTab] = useState<'drivers' | 'passengers' | 'hours'>('drivers');
+  const [search, setSearch] = useState('');
+  const [data, setData] = useState<AnalyticsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback((selectedPeriod: string) => {
+    setLoading(true);
+    setError('');
+    adminFetch<AnalyticsResponse>(`/api/admin/analytics?period=${selectedPeriod}`)
+      .then((res) => {
+        setData(res);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load analytics');
+        setLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadData(period);
+  }, [loadData, period]);
+
+  const periods = [
+    { label: 'Today', value: 'today' },
+    { label: 'Last 7 Days', value: '7d' },
+    { label: 'Last 30 Days', value: '30d' },
+    { label: 'All Time', value: 'all' },
+  ];
+
+  const maxHourCount = Math.max(1, ...(data?.hourlyDistribution?.map((h) => h.count) || [1]));
+
+  const filteredDrivers = (data?.drivers || []).filter((d) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      d.name.toLowerCase().includes(q) ||
+      d.phone.includes(q) ||
+      d.tricycleNumber.toLowerCase().includes(q) ||
+      d.plateNumber.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredPassengers = (data?.passengers || []).filter((p) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.homeBarangay.toLowerCase().includes(q);
+  });
+
+  return (
+    <div>
+      {/* Top Header & Period Filter Controls */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Activity & Performance Analytics</h2>
+          <p style={{ margin: '3px 0 0', color: colors.muted, fontSize: 13 }}>
+            Monitor driver online hours, ride metrics, and passenger demand.
+          </p>
+        </div>
+
+        {/* Period Selector Pills */}
+        <div style={{ display: 'flex', background: colors.border, borderRadius: 8, padding: 3, gap: 4 }}>
+          {periods.map((p) => {
+            const active = period === p.value;
+            return (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value as typeof period)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  border: 'none',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: active ? colors.card : 'transparent',
+                  color: active ? colors.primary : colors.muted,
+                  boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && <Card style={{ color: colors.danger, marginBottom: 16 }}>{error}</Card>}
+
+      {/* Summary KPI Cards */}
+      {data && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 14,
+            marginBottom: 20,
+          }}
+        >
+          <Card>
+            <div style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Driver Online Hours</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: colors.primary, marginTop: 4 }}>
+              {data.summary.totalDriverHours.toLocaleString()} <span style={{ fontSize: 14, fontWeight: 500 }}>hrs</span>
+            </div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+              Across {data.summary.activeDriverCount} active drivers
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Online Right Now</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: colors.ok, marginTop: 4 }}>
+              {data.summary.onlineDriversNow} <span style={{ fontSize: 14, fontWeight: 500 }}>drivers</span>
+            </div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+              Ready for dispatch on map
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Completed Rides</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
+              {data.summary.totalCompleted} <span style={{ fontSize: 14, fontWeight: 500, color: colors.muted }}>/ {data.summary.totalBookings}</span>
+            </div>
+            <div style={{ fontSize: 11, color: colors.ok, marginTop: 4 }}>
+              {data.summary.overallCompletionRate}% completion rate
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Peak Demand Hour</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: colors.warn, marginTop: 6 }}>
+              {data.summary.peakHour}
+            </div>
+            <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+              ₱{data.summary.totalRevenue.toLocaleString()} total fare volume
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Sub Tabs: Drivers vs Passengers vs Peak Hours */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <Button
+          variant={subTab === 'drivers' ? 'primary' : 'ghost'}
+          onClick={() => setSubTab('drivers')}
+        >
+          Drivers & Online Hours ({filteredDrivers.length})
+        </Button>
+        <Button
+          variant={subTab === 'passengers' ? 'primary' : 'ghost'}
+          onClick={() => setSubTab('passengers')}
+        >
+          Passenger Activity ({filteredPassengers.length})
+        </Button>
+        <Button
+          variant={subTab === 'hours' ? 'primary' : 'ghost'}
+          onClick={() => setSubTab('hours')}
+        >
+          Peak Hours Demand Chart
+        </Button>
+      </div>
+
+      {loading && <Card style={{ textAlign: 'center', padding: 36, color: colors.muted }}>Loading analytics…</Card>}
+
+      {/* ── Driver Online Hours & Performance Table ────────────────────────── */}
+      {!loading && subTab === 'drivers' && (
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}`, display: 'flex', gap: 12 }}>
+            <Input
+              placeholder="Search driver by name, phone, tricycle #, or plate…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ maxWidth: 400 }}
+            />
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: colors.bg, borderBottom: `1px solid ${colors.border}` }}>
+                  <Th>Driver</Th>
+                  <Th>Vehicle / Tricycle</Th>
+                  <Th>Status</Th>
+                  <Th>Hours Online</Th>
+                  <Th>Rides Completed</Th>
+                  <Th>Completion Rate</Th>
+                  <Th>Rating</Th>
+                  <Th>Earnings</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDrivers.length === 0 ? (
+                  <tr>
+                    <Td colSpan={8} style={{ textAlign: 'center', color: colors.muted, padding: 30 }}>
+                      No driver activity found for this period.
+                    </Td>
+                  </tr>
+                ) : (
+                  filteredDrivers.map((d) => (
+                    <tr key={d.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
+                      <Td>
+                        <div style={{ fontWeight: 600 }}>{d.name}</div>
+                        <div style={{ fontSize: 11, color: colors.muted }}>{d.phone}</div>
+                      </Td>
+                      <Td>
+                        <div style={{ fontWeight: 500 }}>
+                          {d.tricycleNumber ? `Trike #${d.tricycleNumber}` : d.plateNumber || '—'}
+                        </div>
+                        {d.plateNumber && d.tricycleNumber ? (
+                          <div style={{ fontSize: 11, color: colors.muted }}>Plate: {d.plateNumber}</div>
+                        ) : null}
+                      </Td>
+                      <Td>
+                        {d.isOnline ? (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              padding: '3px 8px',
+                              borderRadius: 12,
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              fontWeight: 600,
+                              fontSize: 11,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: '50%',
+                                background: '#16a34a',
+                              }}
+                            />
+                            Online Now
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 12,
+                              background: '#f1f5f9',
+                              color: colors.muted,
+                              fontSize: 11,
+                              fontWeight: 500,
+                            }}
+                          >
+                            Offline
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span style={{ fontWeight: 700, color: d.onlineHours > 0 ? colors.primary : colors.muted }}>
+                          {d.onlineHours} hrs
+                        </span>
+                      </Td>
+                      <Td>
+                        <span style={{ fontWeight: 600 }}>{d.completedRides}</span>
+                        <span style={{ color: colors.muted, fontSize: 11 }}> / {d.totalRides}</span>
+                      </Td>
+                      <Td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div
+                            style={{
+                              width: 50,
+                              height: 6,
+                              borderRadius: 3,
+                              background: colors.border,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${Math.min(100, d.completionRate)}%`,
+                                height: '100%',
+                                background: d.completionRate >= 80 ? colors.ok : colors.warn,
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{d.completionRate}%</span>
+                        </div>
+                      </Td>
+                      <Td>
+                        {d.rating ? (
+                          <span style={{ fontWeight: 600, color: colors.warn }}>★ {d.rating}</span>
+                        ) : (
+                          <span style={{ color: colors.muted }}>—</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span style={{ fontWeight: 600 }}>₱{d.totalEarnings.toLocaleString()}</span>
+                      </Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Passenger Activity Table ────────────────────────────────────────── */}
+      {!loading && subTab === 'passengers' && (
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}`, display: 'flex', gap: 12 }}>
+            <Input
+              placeholder="Search passenger by name, phone, or barangay…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ maxWidth: 400 }}
+            />
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: colors.bg, borderBottom: `1px solid ${colors.border}` }}>
+                  <Th>Passenger</Th>
+                  <Th>Barangay</Th>
+                  <Th>Total Requested</Th>
+                  <Th>Completed</Th>
+                  <Th>Cancelled</Th>
+                  <Th>Total Spend</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPassengers.length === 0 ? (
+                  <tr>
+                    <Td colSpan={6} style={{ textAlign: 'center', color: colors.muted, padding: 30 }}>
+                      No passenger ride activity in this period.
+                    </Td>
+                  </tr>
+                ) : (
+                  filteredPassengers.map((p) => (
+                    <tr key={p.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
+                      <Td>
+                        <div style={{ fontWeight: 600 }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: colors.muted }}>{p.phone}</div>
+                      </Td>
+                      <Td>{p.homeBarangay || '—'}</Td>
+                      <Td style={{ fontWeight: 600 }}>{p.totalRequested}</Td>
+                      <Td>
+                        <span style={{ color: colors.ok, fontWeight: 600 }}>{p.completedRides}</span>
+                      </Td>
+                      <Td>
+                        <span style={{ color: p.cancelledRides > 0 ? colors.danger : colors.muted, fontWeight: 500 }}>
+                          {p.cancelledRides}
+                        </span>
+                      </Td>
+                      <Td style={{ fontWeight: 700, color: colors.primary }}>
+                        ₱{p.totalSpent.toLocaleString()}
+                      </Td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Peak Hours Demand Heatmap / Bar Chart ─────────────────────────── */}
+      {!loading && subTab === 'hours' && (
+        <Card>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 15 }}>24-Hour Ride Demand (Kidapawan City Time)</h3>
+            <p style={{ margin: '3px 0 0', color: colors.muted, fontSize: 12 }}>
+              Identify commute surges to ensure enough tricycle drivers are online during peak hours.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 8,
+              height: 200,
+              paddingBottom: 24,
+              borderBottom: `1px solid ${colors.border}`,
+              overflowX: 'auto',
+            }}
+          >
+            {(data?.hourlyDistribution || []).map((h) => {
+              const heightPercent = maxHourCount > 0 ? Math.round((h.count / maxHourCount) * 100) : 0;
+              const isPeak = h.count === maxHourCount && h.count > 0;
+
+              return (
+                <div
+                  key={h.hour}
+                  style={{
+                    flex: '1 0 32px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    height: '100%',
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 700, color: isPeak ? colors.warn : colors.muted, marginBottom: 4 }}>
+                    {h.count > 0 ? h.count : ''}
+                  </div>
+                  <div
+                    title={`${h.label}: ${h.count} rides`}
+                    style={{
+                      width: '80%',
+                      height: `${Math.max(4, heightPercent)}%`,
+                      borderRadius: '4px 4px 0 0',
+                      background: isPeak ? colors.warn : colors.primary,
+                      transition: 'height 0.3s ease',
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: colors.muted,
+                      marginTop: 6,
+                      whiteSpace: 'nowrap',
+                      transform: 'rotate(-45deg)',
+                      transformOrigin: 'top left',
+                    }}
+                  >
+                    {h.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 24, fontSize: 12, color: colors.muted, display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: colors.primary }} />
+              Regular Volume
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: colors.warn }} />
+              Peak Hour Surge
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

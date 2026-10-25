@@ -6,8 +6,10 @@ import { fail, ok } from '@/lib/http';
 import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { withLogger } from '@/lib/logger';
+import mongoose from 'mongoose';
 import { setDriverLocation, deleteDriverLocation } from '@/lib/redis';
 import { User } from '@/models/User';
+import { DriverSession } from '@/models/DriverSession';
 
 const schema = z.object({
   online: z.boolean(),
@@ -83,6 +85,45 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     }).select('-passwordHash');
 
     if (!driver) return fail('Driver not found', 404);
+
+    // Track shift session in DriverSession collection
+    const driverObjectId = new mongoose.Types.ObjectId(auth.sub);
+    const now = new Date();
+
+    if (body.online) {
+      // Check if an open session already exists
+      const activeSession = await DriverSession.findOne({
+        driverId: driverObjectId,
+        endedAt: null
+      });
+
+      if (!activeSession) {
+        await DriverSession.create({
+          driverId: driverObjectId,
+          startedAt: now,
+          lastHeartbeatAt: now
+        });
+      } else {
+        await DriverSession.updateOne(
+          { _id: activeSession._id },
+          { $set: { lastHeartbeatAt: now } }
+        );
+      }
+    } else {
+      // Driver toggled offline: close any active open session and compute duration
+      const openSessions = await DriverSession.find({
+        driverId: driverObjectId,
+        endedAt: null
+      });
+
+      for (const s of openSessions) {
+        const durationSeconds = Math.max(0, Math.round((now.getTime() - s.startedAt.getTime()) / 1000));
+        await DriverSession.updateOne(
+          { _id: s._id },
+          { $set: { endedAt: now, durationSeconds, lastHeartbeatAt: now } }
+        );
+      }
+    }
 
     // Sync the live-map cache: going offline removes the driver immediately;
     // going online with a location seeds the cache right away.
