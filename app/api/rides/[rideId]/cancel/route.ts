@@ -22,19 +22,39 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     const { rideId } = await context.params;
     if (!mongoose.Types.ObjectId.isValid(rideId)) return fail('Invalid ride id');
 
-    const ride = await Ride.findById(rideId);
-    if (!ride) return fail('Ride not found', 404);
-    if (String(ride.passengerId) !== auth.sub) return fail('Forbidden', 403);
+    const existingRide = await Ride.findById(rideId).lean();
+    if (!existingRide) return fail('Ride not found', 404);
+    if (String(existingRide.passengerId) !== auth.sub) return fail('Forbidden', 403);
 
-    if (ride.status === 'cancelled') return ok({ ride, message: 'Ride already cancelled' });
-    if (ride.status === 'completed') return fail('Completed rides cannot be cancelled', 409);
-    if (ride.status === 'in_progress') return fail('Ride already in progress and cannot be cancelled from the passenger app', 409);
+    if (existingRide.status === 'cancelled') return ok({ ride: existingRide, message: 'Ride already cancelled' });
+    if (existingRide.status === 'completed') return fail('Completed rides cannot be cancelled', 409);
+    if (existingRide.status === 'in_progress') return fail('Ride already in progress and cannot be cancelled from the passenger app', 409);
+
+    // Atomically transition status to cancelled only if it is still requested or accepted
+    const ride = await Ride.findOneAndUpdate(
+      {
+        _id: new mongoose.Types.ObjectId(rideId),
+        passengerId: new mongoose.Types.ObjectId(auth.sub),
+        status: { $in: ['requested', 'accepted'] }
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          cancelledAt: new Date()
+        }
+      },
+      { returnDocument: 'after' }
+    ).lean();
+
+    if (!ride) {
+      const current = await Ride.findById(rideId).lean();
+      if (current?.status === 'completed') return fail('Completed rides cannot be cancelled', 409);
+      if (current?.status === 'in_progress') return fail('Ride already in progress and cannot be cancelled from the passenger app', 409);
+      if (current?.status === 'cancelled') return ok({ ride: current, message: 'Ride already cancelled' });
+      return fail('Could not cancel ride', 409);
+    }
 
     const hadDriver = Boolean(ride.driverId);
-
-    ride.status = 'cancelled';
-    ride.cancelledAt = new Date();
-    await ride.save();
     await releaseDriverReservations((ride.currentOfferDriverIds || []).map(String), String(ride._id));
 
     // Notify everyone who could be showing this ride: the passenger, the

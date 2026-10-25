@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400'
 };
 
-export function proxy(request: NextRequest)  {
+export function middleware(request: NextRequest) {
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, { status: 204, headers: corsHeaders });
   }

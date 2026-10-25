@@ -10,9 +10,14 @@ export async function connectDb() {
   if (!uri) throw new Error('Missing MONGODB_URI');
 
   if (!global.mongooseConnection) {
-    global.mongooseConnection = mongoose.connect(uri, {
-      dbName: 'movsikel'
-    });
+    global.mongooseConnection = mongoose
+      .connect(uri, {
+        dbName: 'movsikel'
+      })
+      .catch((err) => {
+        global.mongooseConnection = undefined;
+        throw err;
+      });
   }
 
   return global.mongooseConnection;

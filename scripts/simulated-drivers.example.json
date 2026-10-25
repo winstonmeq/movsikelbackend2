@@ -1,0 +1,25 @@
+{
+  "apiBaseUrl": "https://movsikel.com",
+  "center": {
+    "lat": 7.0156,
+    "lng": 125.089964
+  },
+  "radiusMeters": 1200,
+  "movementMeters": 30,
+  "locationIntervalMs": 5000,
+  "defaultPassword": "replace-with-test-driver-password",
+  "drivers": [
+    {
+      "phone": "09170000001",
+      "name": "Test Driver 1"
+    },
+    {
+      "phone": "09170000002",
+      "password": "replace-with-specific-password",
+      "name": "Test Driver 2",
+      "lat": 7.0158,
+      "lng": 125.0902,
+      "lockPosition": false
+    }
+  ]
+}

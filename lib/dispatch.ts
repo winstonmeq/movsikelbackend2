@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { onlineDriverFilter } from '@/lib/account';
 import { emitToUsers, emitToUser } from '@/lib/realtime';
-import {
+import redis, {
   getNearbyOnlineDriverLocations,
   releaseDriverReservations,
   reservedDriverIdSet,
@@ -428,12 +428,28 @@ export async function progressDispatchIfNeeded(rideId: string) {
   const expiresAt = ride.offerExpiresAt ? new Date(ride.offerExpiresAt).getTime() : 0;
   if (!expiresAt || Date.now() < expiresAt) return ride; // still within window
 
-  // Pull in any drivers who became eligible since the queue was last built, so a
-  // late-arriving driver still gets offered the ride on this (or a later) stage.
-  await refreshQueueTail(rideId);
+  // Concurrency guard: acquire a short Redis lock so concurrent polls or worker ticks
+  // do not advance the stage multiple times simultaneously.
+  const lockKey = `lock:dispatch:${rideId}`;
+  const acquired = await redis.set(lockKey, '1', 'PX', 3000, 'NX');
+  if (!acquired) return ride;
 
-  const nextIndex = (ride.dispatchIndex ?? 0) + 1;
-  return applyStage(rideId, nextIndex);
+  try {
+    // Re-verify after acquiring lock in case another worker already advanced it
+    const current = await Ride.findById(rideId).select('status offerExpiresAt dispatchIndex dispatchQueue').lean();
+    if (!current || current.status !== 'requested') return current;
+    const currentExpires = current.offerExpiresAt ? new Date(current.offerExpiresAt).getTime() : 0;
+    if (currentExpires && Date.now() < currentExpires) return current;
+
+    // Pull in any drivers who became eligible since the queue was last built, so a
+    // late-arriving driver still gets offered the ride on this (or a later) stage.
+    await refreshQueueTail(rideId);
+
+    const nextIndex = (current.dispatchIndex ?? 0) + 1;
+    return await applyStage(rideId, nextIndex);
+  } finally {
+    await redis.del(lockKey).catch(() => {});
+  }
 }
 
 /**

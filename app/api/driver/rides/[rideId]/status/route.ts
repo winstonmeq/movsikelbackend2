@@ -48,60 +48,26 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     if (nextStatus === 'completed') updates.completedAt = new Date();
     if (nextStatus === 'cancelled') updates.cancelledAt = new Date();
 
-    // ── Wallet: deduct the flat booking fee on completion (no reward) ──────────
+    let feeToCharge = 0;
+    let feeDescription = '';
+    const fare = (existingRide as any).offeredFare ?? (existingRide as any).fareEstimate ?? 0;
+
     if (nextStatus === 'completed' && (existingRide as any).rideType === 'book') {
-      const fare = (existingRide as any).offeredFare ?? (existingRide as any).fareEstimate ?? 0;
-      const { fee, feeDescription } = computeFee(fare);
-
-      if (fee > 0) {
-        await debitWallet({
-          driverId: auth.sub,
-          amount: fee,
-          type: 'fee',
-          description: feeDescription,
-          rideId,
-        });
-        updates.feeCharged = fee;
-
-        emitToUser(auth.sub, 'wallet:update', {
-          fee,
-          fare,
-        }, {
-          title: 'Booking fee deducted',
-          body: `₱${fee.toFixed(2)} platform fee deducted for your ₱${fare} ride.`,
-        });
-      }
-
-      // ── Referral bonus: credit referrer on referee's first completed booking ──
-      const driver = await User.findById(auth.sub)
-        .select('referredBy referralBonusPaid')
-        .lean();
-
-      if (driver && (driver as any).referredBy && !(driver as any).referralBonusPaid) {
-        const referrerId = String((driver as any).referredBy);
-        await creditWallet({
-          driverId: referrerId,
-          amount: REFERRAL_BONUS,
-          type: 'referral_bonus',
-          description: `Referral bonus — ${auth.name || 'your recruit'} completed their first booking`,
-          rideId,
-        });
-        // Mark so the bonus is only paid once
-        await User.updateOne({ _id: new mongoose.Types.ObjectId(auth.sub) }, { referralBonusPaid: true });
-
-        emitToUser(referrerId, 'wallet:update', { referralBonus: REFERRAL_BONUS }, {
-          title: 'Referral bonus!',
-          body: `₱${REFERRAL_BONUS} added — your recruit completed their first booking ride.`,
-        });
+      const feeResult = computeFee(fare);
+      feeToCharge = feeResult.fee;
+      feeDescription = feeResult.feeDescription;
+      if (feeToCharge > 0) {
+        updates.feeCharged = feeToCharge;
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
+    // Atomically transition the ride status. Only the request that successfully transitions
+    // from a non-terminal status to completed is permitted to debit the wallet or trigger bonuses.
     const ride = await Ride.findOneAndUpdate(
       {
         _id: new mongoose.Types.ObjectId(rideId),
         driverId: new mongoose.Types.ObjectId(auth.sub),
-        status: { $ne: 'completed' }
+        status: { $nin: ['completed', 'cancelled'] }
       },
       updates,
       { returnDocument: 'after' }
@@ -109,7 +75,54 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
       .populate('passengerId', 'name phone')
       .lean();
 
-    if (!ride) return fail('Ride not found or already completed', 404);
+    if (!ride) return fail('Ride not found or already completed/cancelled', 409);
+
+    // ── Wallet: deduct the booking fee only after status transition was committed ──
+    if (nextStatus === 'completed' && (existingRide as any).rideType === 'book') {
+      if (feeToCharge > 0) {
+        await debitWallet({
+          driverId: auth.sub,
+          amount: feeToCharge,
+          type: 'fee',
+          description: feeDescription,
+          rideId,
+        });
+
+        emitToUser(auth.sub, 'wallet:update', {
+          fee: feeToCharge,
+          fare,
+        }, {
+          title: 'Booking fee deducted',
+          body: `₱${feeToCharge.toFixed(2)} platform fee deducted for your ₱${fare} ride.`,
+        });
+      }
+
+      // ── Referral bonus: atomically flag driver so bonus is credited exactly once ──
+      const driverBeforeUpdate = await User.findOneAndUpdate(
+        {
+          _id: new mongoose.Types.ObjectId(auth.sub),
+          referredBy: { $exists: true, $ne: null },
+          referralBonusPaid: { $ne: true }
+        },
+        { $set: { referralBonusPaid: true } }
+      ).select('referredBy').lean();
+
+      if (driverBeforeUpdate && (driverBeforeUpdate as any).referredBy) {
+        const referrerId = String((driverBeforeUpdate as any).referredBy);
+        await creditWallet({
+          driverId: referrerId,
+          amount: REFERRAL_BONUS,
+          type: 'referral_bonus',
+          description: `Referral bonus — ${auth.name || 'your recruit'} completed their first booking`,
+          rideId,
+        });
+
+        emitToUser(referrerId, 'wallet:update', { referralBonus: REFERRAL_BONUS }, {
+          title: 'Referral bonus!',
+          body: `₱${REFERRAL_BONUS} added — your recruit completed their first booking ride.`,
+        });
+      }
+    }
 
     const update = { ride };
     const passengerId = String((ride as any).passengerId?._id || (ride as any).passengerId);

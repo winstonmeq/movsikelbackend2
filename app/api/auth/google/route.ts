@@ -27,15 +27,17 @@ async function verifyGoogleToken(idToken: string): Promise<GoogleTokenPayload> {
 
   const data = await res.json();
 
-  // Accept tokens issued for the configured OAuth clients in this project.
-  // GOOGLE_CLIENT_ID is the web client; GOOGLE_ANDROID_CLIENT_ID is the Android client.
-  // If neither env var is set we skip the audience check entirely.
   const allowedAudiences = [
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_ANDROID_CLIENT_ID,
   ].filter(Boolean);
 
-  if (allowedAudiences.length > 0 && !allowedAudiences.includes(data.aud)) {
+  if (allowedAudiences.length === 0) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Google OAuth is not configured on this server');
+    }
+    console.warn('[auth/google] Warning: Neither GOOGLE_CLIENT_ID nor GOOGLE_ANDROID_CLIENT_ID is configured. Audience check skipped for dev only.');
+  } else if (!allowedAudiences.includes(data.aud)) {
     throw new Error(`Token audience mismatch: ${data.aud}`);
   }
 
@@ -77,6 +79,10 @@ export const POST = withLogger(async function POST(req: NextRequest) {
       googleUser = await verifyGoogleToken(idToken);
     } catch {
       return fail('Google authentication failed. Please try again.', 401);
+    }
+
+    if (!googleUser.email_verified) {
+      return fail('Google email address is not verified. Please verify your Google account email first.', 401);
     }
 
     // Find existing user by googleId or email, or create a new one

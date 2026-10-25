@@ -1,22 +1,20 @@
-# Backend
+# MovSikel Backend
 
-Next.js API plus Socket.IO realtime server for the MovSikel passenger and MovSikel Driver apps.
+Next.js App Router API, Redis geo/dispatch engine, and Firebase Cloud Messaging (FCM) realtime notification server for the MovSikel passenger and MovSikel Driver apps.
 
-## Features included
+## Architecture & Features
 
-- Passenger and driver registration/login
-- JWT auth
-- MongoDB Atlas via Mongoose
-- Google Places autocomplete and place details proxy
-- Google Directions proxy for route polyline
-- Ride request creation
-- Nearby online driver lookup using a MongoDB 2dsphere index
-- Realtime driver notification
-- Driver accepts ride
-- Passenger receives accepted, arrived, in_progress, completed, cancelled status updates
-- Passenger receives driver live location during an active ride
+- **Auth & Access Control**: JWT authentication (jose/bcrypt) with instant suspension/ban enforcement.
+- **Database**: MongoDB Atlas via Mongoose with connection pooling and cached reconnection recovery.
+- **Presence & Dispatch (Redis)**:
+  - High-precision Redis GEO indexing (`GEOADD` / `GEOSEARCH`) for live driver presence with 60s TTL.
+  - Staged sequential dispatch with distributed reservation locking to prevent concurrent double-booking.
+  - Background progression worker (`lib/dispatchWorker.ts`) advancing offer stages every 4 seconds.
+- **Push & Realtime Notifications**: Firebase Cloud Messaging (FCM HTTP v1) for tray and in-app event notifications.
+- **Google Maps Proxies**: Places autocomplete/details and Directions route polyline caching with IP rate limiting.
+- **Driver Wallet & Ledger**: Double-entry ledger (`WalletTransaction`) with atomic booking fee deduction, driver minimum balance gating, and single-credit referral bonuses.
 
-## Run locally
+## Run Locally
 
 ```bash
 cd backend
@@ -25,51 +23,52 @@ npm install
 npm run dev
 ```
 
-The API and Socket.IO server run at:
+The Next.js API server runs at:
 
 ```text
-http://localhost:4000
+http://localhost:3000
 ```
 
-## Deployment note
+## Key API Endpoints
 
-Because realtime Socket.IO is running in `server.ts`, deploy this backend to a Node server/VPS/container platform. Do not deploy this version as pure Vercel serverless functions.
+### Authentication
+- `POST /api/auth/register` — Register passenger or driver (with optional referral code)
+- `POST /api/auth/login` — Phone & password login with IP rate limiting
+- `POST /api/auth/google` — Google OAuth sign-in (with verified email & audience check)
 
-## API endpoints
+### Passenger Rides
+- `POST /api/rides/request` — Create ride request & launch staged sequential dispatch
+- `GET /api/rides/:rideId` — Get ride status and driver location overlay
+- `POST /api/rides/:rideId/cancel` — Atomically cancel ride before trip start
+- `POST /api/rides/:rideId/rate` — Submit passenger 1-5 star driver rating
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/places/autocomplete?input=market&lat=14.1&lng=121.0`
-- `GET /api/places/details?placeId=...`
-- `GET /api/directions?originLat=...&originLng=...&destLat=...&destLng=...`
-- `POST /api/rides/request`
-- `GET /api/rides/:rideId`
+### Driver Operations
+- `GET /api/driver/requests` — Poll incoming ride offers for current dispatch stage
+- `POST /api/driver/rides/:rideId/accept` — Accept currently offered ride (wallet balance gated)
+- `POST /api/driver/rides/:rideId/decline` — Decline offer and immediately advance to next driver
+- `POST /api/driver/rides/:rideId/status` — Advance status (`arrived` -> `in_progress` -> `completed`) with atomic wallet fee deduction
+- `POST /api/driver/location` — Broadcast live GPS position (updates Redis & MongoDB)
+- `POST /api/driver/availability` — Toggle online/offline status
+- `GET /api/driver/wallet` — Driver balance, transaction history, and fee rates
 
-## Socket events
+### Admin Dashboard & Management
+- `GET /api/admin/overview` — Platform KPI summary and estimated revenue
+- `GET /api/admin/rides` — Ride logs with filter by status/type
+- `GET /api/admin/users` — User management (suspend, ban, search)
+- `GET /api/admin/wallet` — System-wide driver wallet overview & top-up ledger
 
-Client emits:
+## Environment Setup
 
-- `driver:location` `{ lat, lng, heading }`
-- `driver:accept_ride` `{ rideId }`
-- `ride:status` `{ rideId, status }` where status is `arrived`, `in_progress`, `completed`, or `cancelled`
-
-Server emits:
-
-- `ride:request`
-- `ride:update`
-- `ride:driver_location`
-- `error_message`
-
-## Environment setup
-
-Create a `.env` file inside this `backend` folder before running the server:
+Create a `.env` file inside the `backend` folder:
 
 ```env
-MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/db?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/movsikel?retryWrites=true&w=majority
 JWT_SECRET=change-this-to-a-long-random-secret
+REDIS_URL=redis://localhost:6379
 GOOGLE_MAPS_API_KEY=your-google-maps-api-key
-PORT=4000
+GOOGLE_CLIENT_ID=your-google-web-client-id
+GOOGLE_ANDROID_CLIENT_ID=your-google-android-client-id
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 CORS_ORIGIN=*
+PORT=3000
 ```
-
-The custom server loads this file via `dotenv/config`.

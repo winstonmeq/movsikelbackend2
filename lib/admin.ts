@@ -41,6 +41,9 @@ export function parsePaging(req: NextRequest, defaultLimit = 50, maxLimit = 50) 
   return { page, limit, skip: (page - 1) * limit };
 }
 
+import { connectDb } from '@/lib/db';
+import { User } from '@/models/User';
+
 /**
  * Wraps an admin route handler: authenticates as admin, maps auth failures to
  * the right status, and funnels unexpected errors to a 500.
@@ -52,6 +55,14 @@ export async function withAdmin(
   let admin;
   try {
     admin = await getAdminUser(req);
+    await connectDb();
+    const adminUser = await User.findById(admin.sub).select('role status').lean();
+    if (!adminUser || (adminUser as any).role !== 'admin') {
+      return fail('Admin access required', 403);
+    }
+    if ((adminUser as any).status === 'banned' || (adminUser as any).status === 'suspended') {
+      return fail('Admin account is suspended or banned', 403);
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unauthorized';
     if (message === 'Admin access required') return fail('Admin access required', 403);

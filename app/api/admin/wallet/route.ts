@@ -35,9 +35,10 @@ export const GET = withLogger(async function GET(req: NextRequest) {
     // Match drivers by name/phone if search provided
     const userFilter: Record<string, unknown> = { role: 'driver' };
     if (search) {
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       userFilter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
+        { name: { $regex: safe, $options: 'i' } },
+        { phone: { $regex: safe, $options: 'i' } },
       ];
     }
 

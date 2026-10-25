@@ -7,8 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "seed:admin": "tsx scripts/seedAdmin.ts"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "seed:admin": "tsx scripts/seedAdmin.ts",
+    "simulate:drivers": "node scripts/simulateDrivers.mjs"
   },
   "dependencies": {
     "bcryptjs": "latest",

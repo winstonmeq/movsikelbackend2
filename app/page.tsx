@@ -4,7 +4,7 @@ import styles from './landing.module.css';
 import MapBackground from './MapBackground';
 
 const androidDownloadUrl =
-  'https://drive.usercontent.google.com/download?id=1m1OG1tgdtt6rVMFGaE6gHnkFinwHTrqW&export=download&authuser=0&fbclid=IwY2xjawSvQIFleHRuA2FlbQIxMABicmlkETF5QWF6NWdIaVU1NkQwMVM5c3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjtFreIJQnS7pn7d34YPtfNQxlaSzVNiCmLr6w5DvmYkOtdXZJNlBIgoKyVB_aem_xLtcUftBcqeQ09_ZS5zFHQ';
+  'https://drive.usercontent.google.com/download?id=1DLtWFupGyIaxXa0-CO2IPEfXv4_7iRra&export=download&authuser=0';
 
 export const metadata = {
   title: 'MovSikel — Ride your way',

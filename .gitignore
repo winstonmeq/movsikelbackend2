@@ -27,6 +27,7 @@ ios/Pods
 # Firebase service account (contains private key — never commit)
 firebase-adminsdk.json
 *-adminsdk-*.json
+scripts/simulated-drivers.local.json
 
 # Archives
 *.zip
