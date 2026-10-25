@@ -10,7 +10,7 @@ import { Ride } from '@/models/Ride';
 import { User } from '@/models/User';
 import { getOrCreateWallet } from '@/lib/wallet';
 import { WALLET_MINIMUM_ACCEPT, computeFee } from '@/lib/fareScheme';
-import { releaseDriverReservations } from '@/lib/redis';
+import redis, { releaseDriverReservations } from '@/lib/redis';
 
 function allowOpenRideAccept() {
   return String(process.env.ALLOW_OPEN_RIDE_ACCEPT || 'false').toLowerCase() === 'true';
@@ -139,6 +139,16 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     // Heads-up tray alert for the passenger (their request was just accepted) so
     // they notice even if the app is backgrounded. The driver's own copy is a
     // silent in-app sync.
+    // 1. Broadcast to WebSocket clients listening to this ride
+    await redis.publish(
+      `ride:live:${rideId}`,
+      JSON.stringify({
+        event: 'ride:update',
+        data: update
+      })
+    ).catch(() => {});
+
+    // 2. FCM tray notification
     emitToUser(passengerId, 'ride:update', update, {
       title: 'Driver on the way',
       body: `${(driver as any).name || 'Your driver'} accepted your ride and is heading to your pickup.`

@@ -10,6 +10,7 @@ import { Ride, type RideStatus } from '@/models/Ride';
 import { User } from '@/models/User';
 import { computeFee, REFERRAL_BONUS } from '@/lib/fareScheme';
 import { creditWallet, debitWallet } from '@/lib/wallet';
+import redis from '@/lib/redis';
 void User; // register User schema for .populate()
 
 const allowedStatuses: RideStatus[] = ['arrived', 'in_progress', 'completed', 'cancelled'];
@@ -136,6 +137,16 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
         ? { title: 'Ride completed', body: 'Thank you for riding with MovSikel.' }
         : undefined;
 
+    // 1. Broadcast to WebSocket clients listening on this ride
+    await redis.publish(
+      `ride:live:${rideId}`,
+      JSON.stringify({
+        event: 'ride:update',
+        data: update
+      })
+    ).catch(() => {});
+
+    // 2. Push notification via FCM
     emitToUser(passengerId, 'ride:update', update, passengerNote);
     emitToUser(auth.sub, 'ride:update', update);
 

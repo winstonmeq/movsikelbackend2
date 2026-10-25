@@ -10,7 +10,8 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "seed:admin": "tsx scripts/seedAdmin.ts",
-    "simulate:drivers": "node scripts/simulateDrivers.mjs"
+    "simulate:drivers": "node scripts/simulateDrivers.mjs",
+    "ws": "tsx server/websocket.ts"
   },
   "dependencies": {
     "bcryptjs": "latest",
@@ -23,12 +24,14 @@
     "next": "16.2.7",
     "react": "latest",
     "react-dom": "latest",
+    "ws": "^8.22.0",
     "zod": "latest"
   },
   "devDependencies": {
     "@types/bcryptjs": "latest",
     "@types/node": "latest",
     "@types/react": "^19.2.17",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.22.4",
     "typescript": "latest"
   }

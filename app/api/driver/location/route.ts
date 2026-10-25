@@ -6,7 +6,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { isValidLatLng, toPoint } from '@/lib/geo';
 import { emitToUser } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
-import { setDriverLocation, deleteDriverLocation } from '@/lib/redis';
+import redis, { setDriverLocation, deleteDriverLocation } from '@/lib/redis';
 import { User } from '@/models/User';
 import { Ride } from '@/models/Ride';
 
@@ -61,13 +61,25 @@ export const POST = withLogger(async function POST(req: NextRequest) {
     }).select('passengerId status');
 
     if (activeRide) {
-      emitToUser(String(activeRide.passengerId), 'ride:driver_location', {
+      const locationPayload = {
         rideId: String(activeRide._id),
         lat: body.lat,
         lng: body.lng,
         heading: body.heading,
         status: activeRide.status
-      });
+      };
+
+      // 1. Instant WebSocket broadcast via Redis Pub/Sub (< 1ms latency for smooth 60fps tracking)
+      await redis.publish(
+        `ride:live:${activeRide._id}`,
+        JSON.stringify({
+          event: 'ride:driver_location',
+          data: locationPayload
+        })
+      ).catch(() => {});
+
+      // 2. FCM broadcast for background app notifications / backwards compatibility
+      emitToUser(String(activeRide.passengerId), 'ride:driver_location', locationPayload);
     }
 
     return ok({ driver });

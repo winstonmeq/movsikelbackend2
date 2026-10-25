@@ -5,7 +5,7 @@ import { requireActiveUser, statusForAuthError } from '@/lib/account';
 import { fail, ok } from '@/lib/http';
 import { emitToUsers } from '@/lib/realtime';
 import { withLogger } from '@/lib/logger';
-import { releaseDriverReservations } from '@/lib/redis';
+import redis, { releaseDriverReservations } from '@/lib/redis';
 import { Ride } from '@/models/Ride';
 
 export const POST = withLogger(async function POST(req: NextRequest, context?: any) {
@@ -71,6 +71,16 @@ export const POST = withLogger(async function POST(req: NextRequest, context?: a
     // Only a driver who had ACCEPTED needs a heads-up tray alert (their active
     // trip just vanished). Drivers merely offered an unaccepted request don't
     // need a noisy notification — their request card just clears on next sync.
+    // 1. Broadcast to WebSocket clients listening on this ride
+    await redis.publish(
+      `ride:live:${rideId}`,
+      JSON.stringify({
+        event: 'ride:update',
+        data: { ride, cancelledBy: 'passenger' }
+      })
+    ).catch(() => {});
+
+    // 2. FCM alerts
     emitToUsers(
       [...notifyUserIds],
       'ride:update',
