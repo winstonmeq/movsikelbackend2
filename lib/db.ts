@@ -12,7 +12,7 @@ export async function connectDb() {
   if (!global.mongooseConnection) {
     global.mongooseConnection = mongoose
       .connect(uri, {
-        dbName: 'movsikel'
+        dbName: 'movsikel2'
       })
       .catch((err) => {
         global.mongooseConnection = undefined;
